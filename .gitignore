@@ -1,0 +1,36 @@
+# Private conversations, plans, diagnostics and backups
+.sandbox/
+.claude/
+backups/
+sync-*/
+plan.json
+snapshot.json
+result.json
+last-sync.json
+asset-manifest.json
+*.jsonl
+.env
+.env.*
+
+# Local investigation reports (may include private paths and account metadata)
+/TEST_REPORT.md
+/LIVE_TEST_REPORT.md
+/ASSET_SYNC_REPORT.md
+/FOLLOWUP_REPORT.md
+/desktop/BUILD_REPORT.json
+
+# Dependencies, caches and generated application bundles
+node_modules/
+__pycache__/
+*.py[cod]
+dist/
+desktop-old/
+desktop/backend-dist/
+desktop/backend-build/
+desktop/*.spec
+desktop/renderer/vendor/
+release/
+.DS_Store
+
+# Keep the pinned optional SDK validation dependencies reproducible
+!/package-lock.json

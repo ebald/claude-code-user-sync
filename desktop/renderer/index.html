@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code User Sync</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/i18next.js" defer></script>
+  <script src="translations.js" defer></script>
+  <script src="summary.js" defer></script>
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-sync" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></symbol>
+    <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 1-8 8H5l-3 3v-8a8 8 0 1 1 18-3Z"/><path d="M7 9h8M7 13h5"/></symbol>
+    <symbol id="icon-accounts" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v2"/></symbol>
+    <symbol id="icon-projects" viewBox="0 0 24 24"><rect x="5" y="4" width="16" height="13" rx="2"/><path d="M17 21H5a2 2 0 0 1-2-2V8M9 8h8M9 12h5"/></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9S4 17 4 12V6l8-3Z"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="icon-power" viewBox="0 0 24 24"><path d="M12 2v10M6 5a9 9 0 1 0 12 0"/></symbol>
+    <symbol id="icon-open" viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M10 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-5"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="m10 4-8 14a2 2 0 0 0 2 3h16a2 2 0 0 0 2-3L14 4a2 2 0 0 0-4 0Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  </svg>
+
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#icon-chat"/></svg><svg class="brand-sync icon"><use href="#icon-sync"/></svg></div>
+      <div class="brand-copy"><p class="app-name">Claude Code User Sync</p><p class="app-tagline" data-i18n="tagline"></p></div>
+      <span id="preview-badge" class="preview-badge" hidden data-i18n="exampleData"></span>
+    </header>
+
+    <section class="intro" aria-labelledby="hero-title">
+      <h1 id="hero-title" data-i18n="hero"></h1>
+      <p class="intro-copy" data-i18n="heroDescription"></p>
+      <div class="pills">
+        <span class="pill"><svg class="icon" aria-hidden="true"><use href="#icon-accounts"/></svg><span id="account-count"></span></span>
+        <span class="pill"><svg class="icon" aria-hidden="true"><use href="#icon-projects"/></svg><span data-i18n="allProjects"></span></span>
+        <span class="pill"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg><span data-i18n="automaticBackup"></span></span>
+      </div>
+    </section>
+
+    <section class="workflow" aria-label="Synchronization steps">
+      <ol class="steps">
+        <li class="step" data-phase="closing"><span class="step-icon"><svg class="icon" aria-hidden="true"><use href="#icon-power"/></svg></span><div class="step-copy"><h2 data-i18n="closeTitle"></h2><p data-i18n="closeDescription"></p></div><span class="step-number" aria-hidden="true">1</span><span class="step-spinner" aria-hidden="true"></span><svg class="step-check icon" aria-hidden="true"><use href="#icon-check"/></svg></li>
+        <li class="step" data-phase="syncing"><span class="step-icon"><svg class="icon" aria-hidden="true"><use href="#icon-sync"/></svg></span><div class="step-copy"><h2 data-i18n="syncTitle"></h2><p data-i18n="syncDescription"></p></div><span class="step-number" aria-hidden="true">2</span><span class="step-spinner" aria-hidden="true"></span><svg class="step-check icon" aria-hidden="true"><use href="#icon-check"/></svg></li>
+        <li class="step" data-phase="reopening"><span class="step-icon"><svg class="icon" aria-hidden="true"><use href="#icon-open"/></svg></span><div class="step-copy"><h2 data-i18n="reopenTitle"></h2><p data-i18n="reopenDescription"></p></div><span class="step-number" aria-hidden="true">3</span><span class="step-spinner" aria-hidden="true"></span><svg class="step-check icon" aria-hidden="true"><use href="#icon-check"/></svg></li>
+      </ol>
+    </section>
+
+    <button id="sync-button" class="primary-button" type="button"><svg id="sync-button-icon" class="icon" aria-hidden="true"><use href="#icon-sync"/></svg><span id="sync-button-spinner" class="button-spinner" hidden aria-hidden="true"></span><span id="sync-button-label" data-i18n="syncButton"></span></button>
+    <p id="usage-hint" class="usage-hint"><svg class="icon" aria-hidden="true"><use href="#icon-info"/></svg><span id="usage-hint-text"></span></p>
+
+    <section id="status-card" class="status-card" aria-live="polite" aria-atomic="true">
+      <svg class="status-icon icon" aria-hidden="true"><use id="status-icon-use" href="#icon-chat"/></svg>
+      <div class="status-copy"><h2 id="status-title"></h2><p id="status-description"></p><p id="verification-summary" class="verification-summary" hidden></p><div class="status-actions"><button id="diagnostics-button" class="text-button" type="button" hidden data-i18n="viewDiagnostics"></button><button id="error-details-button" class="text-button" type="button" hidden data-i18n="viewDetails"></button><button id="files-button" class="text-button" type="button" hidden data-i18n="viewFiles"></button></div></div>
+    </section>
+    <p id="notice" class="notice" role="status" hidden></p>
+
+    <footer class="app-footer">
+      <p id="last-sync-date" class="last-sync-date"></p>
+      <div class="footer-controls"><label class="language-control"><span data-i18n="language"></span><select id="language-select" aria-label="Language"><option value="en">English</option><option value="es">Español</option><option value="pt-BR">Português</option></select></label><button id="settings-button" class="icon-button" type="button" aria-label="Settings" title="Settings"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg></button><button id="open-claude-button" class="text-button open-claude" type="button" data-i18n="openClaude"></button></div>
+    </footer>
+  </main>
+
+  <dialog id="diagnostics-dialog" class="dialog diagnostics-dialog" aria-labelledby="diagnostics-title">
+    <div class="dialog-header"><div><p class="eyebrow" data-i18n="diagnosticsEyebrow"></p><h2 id="diagnostics-title" data-i18n="diagnosticsTitle"></h2></div><button class="icon-button dialog-close" type="button" data-close="diagnostics-dialog" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div id="diagnostics-content" class="dialog-content"></div>
+    <div class="dialog-footer"><button id="backup-button" class="secondary-button" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg><span data-i18n="showBackup"></span></button><button class="secondary-button" type="button" data-close="diagnostics-dialog" data-i18n="close"></button></div>
+  </dialog>
+
+  <dialog id="error-dialog" class="dialog" aria-labelledby="error-title">
+    <div class="dialog-header"><h2 id="error-title" data-i18n="detailsTitle"></h2><button class="icon-button dialog-close" type="button" data-close="error-dialog" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div class="dialog-content"><p id="error-localized" class="dialog-paragraph"></p><details class="technical-details"><summary data-i18n="technicalDetails"></summary><pre id="error-raw"></pre></details></div>
+    <div class="dialog-footer"><button class="secondary-button" type="button" data-close="error-dialog" data-i18n="close"></button></div>
+  </dialog>
+
+  <dialog id="settings-dialog" class="dialog settings-dialog" aria-labelledby="settings-title">
+    <div class="dialog-header"><div><p class="eyebrow" data-i18n="settingsEyebrow"></p><h2 id="settings-title" data-i18n="settings"></h2></div><button class="icon-button dialog-close" type="button" data-close="settings-dialog" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div class="dialog-content"><p class="dialog-paragraph" data-i18n="settingsDescription"></p><div class="setting-row"><div><h3 data-i18n="claudeApplication"></h3><p data-i18n="claudeApplicationDescription"></p></div><button id="choose-claude-button" class="secondary-button" type="button" data-i18n="chooseApplication"></button></div><div class="setting-row"><div><h3 data-i18n="claudeData"></h3><p data-i18n="claudeDataDescription"></p></div><button id="choose-data-button" class="secondary-button" type="button" data-i18n="chooseFolder"></button></div><div class="setting-row"><div><h3 data-i18n="chatHistories"></h3><p data-i18n="chatHistoriesDescription"></p></div><button id="choose-projects-button" class="secondary-button" type="button" data-i18n="chooseFolder"></button></div><p id="settings-preview-hint" class="settings-note" hidden data-i18n="previewSettings"></p></div>
+    <div class="dialog-footer"><button class="secondary-button" type="button" data-close="settings-dialog" data-i18n="close"></button></div>
+  </dialog>
+</body>
+</html>

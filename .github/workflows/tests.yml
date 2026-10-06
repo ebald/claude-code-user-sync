@@ -1,0 +1,81 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022]
+        python-version: ["3.10", "3.14"]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run synthetic Python tests
+        run: python -m unittest discover -v
+
+  electron:
+    name: Electron app on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run Electron workflow and translation tests
+        run: npm test
+      - name: Check source app in read-only preview mode
+        run: npm run smoke
+      - name: Build unpacked app with bundled backend
+        run: npm run pack
+      - name: Check packaged backend on macOS without live data
+        if: runner.os == 'macOS'
+        run: desktop/backend-dist/claude-sync-backend/claude-sync-backend --help
+      - name: Check packaged backend on Windows without live data
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ".\desktop\backend-dist\claude-sync-backend\claude-sync-backend.exe" --help
+          if ($LASTEXITCODE -ne 0) { throw "The packaged backend could not load." }
+      - name: Check packaged app in read-only preview mode
+        run: npm run smoke:packaged

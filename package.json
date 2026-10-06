@@ -1,0 +1,45 @@
+{
+  "name": "claude-code-user-sync",
+  "version": "1.3.0",
+  "description": "Synchronize local Claude Code chats across user accounts on the same computer.",
+  "author": "ebald",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "engines": {"node": ">=22.12.0"},
+  "scripts": {
+    "prepare:ui": "node desktop/scripts/prepare_ui.cjs",
+    "postinstall": "npm run prepare:ui",
+    "start": "npm run prepare:ui && electron .",
+    "preview": "npm run prepare:ui && electron . --preview",
+    "test": "node --test desktop/tests/*.test.cjs desktop/renderer/*.test.cjs",
+    "build:backend": "node desktop/scripts/build_backend.cjs",
+    "pack": "npm run prepare:ui && npm run build:backend && electron-builder --config desktop/scripts/builder-config.cjs --dir",
+    "build:mac": "npm run prepare:ui && npm run build:backend -- --platform darwin && electron-builder --config desktop/scripts/builder-config.cjs --mac",
+    "build:win": "npm run prepare:ui && npm run build:backend -- --platform win32 && electron-builder --config desktop/scripts/builder-config.cjs --win --x64",
+    "smoke": "node desktop/scripts/smoke.cjs",
+    "smoke:packaged": "node desktop/scripts/smoke.cjs --packaged",
+    "validate": "node validate_sessions.mjs"
+  },
+  "dependencies": {"i18next": "26.4.2"},
+  "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.285",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.baker.claude-account-sync",
+    "productName": "Claude Code User Sync",
+    "directories": {"output": "release"},
+    "files": [
+      "desktop/main.cjs", "desktop/preload.cjs", "desktop/workflow.cjs", "desktop/backend-client.cjs",
+      "desktop/renderer/**/*", "!desktop/renderer/*.test.cjs", "desktop/locales/*.json", "desktop/assets/icon.png", "package.json"
+    ],
+    "extraResources": [{"from": "desktop/backend-dist/claude-sync-backend", "to": "backend", "filter": ["**/*"]}],
+    "asar": true,
+    "icon": "desktop/assets/icon.png",
+    "mac": {"category": "public.app-category.utilities", "target": ["dmg", "zip"], "identity": "-", "hardenedRuntime": true, "entitlements": "desktop/entitlements.mac.plist", "entitlementsInherit": "desktop/entitlements.mac.plist", "minimumSystemVersion": "13.0"},
+    "win": {"target": [{"target": "nsis", "arch": ["x64"]}]},
+    "nsis": {"oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true}
+  }
+}
