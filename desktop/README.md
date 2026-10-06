@@ -1,5 +1,7 @@
 # Claude Code User Sync desktop app
 
+English · [Español](README.es.md) · [Português](README.pt-BR.md)
+
 A shared Electron interface for macOS, Windows and Linux, backed by the existing Python synchronization engine. The main [README](../README.md) explains the scope of synchronization and the command-line tool.
 
 ## Run from source
@@ -10,7 +12,7 @@ Use macOS 13 or newer, Windows 10/11, or Ubuntu 22.04+/Debian 12+ with the offic
 
 From the repository root, run `bash ./setup.sh` on macOS or Linux, or `.\setup.bat` in PowerShell on native Windows x64. On macOS you can also double-click `setup.command`; on Windows, double-click `setup.bat`.
 
-The scripts check installed tools, install missing prerequisites, run `npm ci` and open the Electron app. Installation requires an internet connection. Opening the app does not synchronize Claude data. Compatible existing Node.js, npm and Python installations are reused.
+The scripts check installed tools, install missing prerequisites, run `npm ci --include=dev` and open the Electron app. Installation requires an internet connection. Opening the app does not synchronize Claude data. Compatible existing Node.js, npm and Python installations are reused.
 
 On Linux where AppArmor restricts launching Electron from source, default setup builds and installs the `.deb` package, then opens the installed app as your normal user. Installation may request your administrator password. After installation, open the app directly from your application menu on later launches. This covers the restrictions used by Ubuntu 24.04 and newer. `--no-launch` prepares source dependencies without building or installing the app package; `--check` reports the required launch route without changing anything.
 
@@ -26,6 +28,8 @@ bash ./setup.sh --no-launch
 .\setup.bat --check
 .\setup.bat --no-launch
 ```
+
+`--check` exits successfully when the prerequisites are ready, or reports missing prerequisites and exits with status 1. Add `--help` to either launcher to see its available options.
 
 The console messages are in English; the app follows its operating system language preference. For source launches, run the setup script again to open the app later. See the [automatic setup guide](../README.md#automatic-setup) for platform installation details.
 

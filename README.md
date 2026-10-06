@@ -78,7 +78,19 @@ bash ./setup.sh --check
 .\setup.bat --check
 ```
 
-To install missing prerequisites and prepare source dependencies without opening the app, replace `--check` with `--no-launch`. On Linux, this also skips building and installing the app package. For source launches, run the setup script again whenever you want to open the app. Manual setup and development remain available below.
+The check exits successfully when the prerequisites are ready, or reports what is missing and exits with status 1. To install missing prerequisites and prepare source dependencies without opening the app:
+
+```sh
+# macOS / Linux
+bash ./setup.sh --no-launch
+```
+
+```powershell
+# Windows
+.\setup.bat --no-launch
+```
+
+On Linux, `--no-launch` also skips building and installing the app package. Add `--help` to either launcher to see the available options. For source launches, run the setup script again whenever you want to open the app. Manual setup and development remain available below.
 
 ### Manual setup for developers
 

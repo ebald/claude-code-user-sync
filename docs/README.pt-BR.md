@@ -23,7 +23,7 @@ A ferramenta não transfere chats entre contas na nuvem ou computadores e não s
 
 ## Requisitos
 
-- macOS 13 ou mais recente, Windows 10/11 ou Ubuntu 22.04+/Debian 12+, com Claude Desktop e conversas locais na aba Code. Consulte o [guia oficial do beta Linux](https://code.claude.com/docs/en/desktop-linux); ele oferece x64 e arm64.
+- macOS 13 ou mais recente, Windows 10/11 ou Ubuntu 22.04+/Debian 12+, com Claude Desktop e conversas locais na aba Code. Consulte o [guia de instalação para macOS/Windows](https://support.claude.com/en/articles/10065433-install-claude-desktop) ou o [guia oficial do beta Linux](https://code.claude.com/docs/en/desktop-linux). O Linux oferece x64 e arm64.
 - Pelo menos dois perfis de conta inicializados localmente. Entre em cada conta, abra a aba Code, selecione o ambiente Local e crie uma conversa nesse computador.
 - Para executar pelo código-fonte: **Node.js 22.12 ou mais recente**, npm e **Python 3.10 ou mais recente**. O motor Python usa somente a biblioteca padrão. No macOS, use uma instalação de Python compatível com sua versão do macOS.
 - Os aplicativos empacotados incluem Electron e Python. O computador de destino não precisa instalar Node.js nem Python separadamente. Uma compilação para macOS pode exigir uma versão mais recente que o macOS 13, dependendo do Python usado para compilá-la.
@@ -77,7 +77,19 @@ bash ./setup.sh --check
 .\setup.bat --check
 ```
 
-Para instalar os requisitos ausentes e preparar as dependências do código-fonte sem abrir o aplicativo, substitua `--check` por `--no-launch`. No Linux, isso também pula a compilação e a instalação do pacote do aplicativo. Para abrir pelo código-fonte, execute o script novamente quando quiser abrir o aplicativo. A preparação manual e o desenvolvimento continuam disponíveis abaixo.
+A verificação termina com sucesso se os requisitos estiverem prontos; se faltar algo, informa o que falta e termina com o código de saída 1. Para instalar os requisitos ausentes e preparar as dependências do código-fonte sem abrir o aplicativo:
+
+```sh
+# macOS / Linux
+bash ./setup.sh --no-launch
+```
+
+```powershell
+# Windows
+.\setup.bat --no-launch
+```
+
+No Linux, `--no-launch` também pula a compilação e a instalação do pacote do aplicativo. Adicione `--help` a qualquer um dos lançadores para consultar as opções disponíveis. Para abrir pelo código-fonte, execute o script novamente quando quiser abrir o aplicativo. A preparação manual e o desenvolvimento continuam disponíveis abaixo.
 
 ### Preparação manual para desenvolvedores
 
@@ -127,7 +139,7 @@ npm run build:mac
 
 Gera um DMG e um ZIP em `release/` para a arquitetura do Mac atual. A compilação cria um ambiente Python isolado e empacota o motor com PyInstaller. Registra o requisito de macOS a partir do Electron e do Python incluído, usando a versão mínima mais recente dos dois. O aplicativo recebe uma assinatura local ad hoc e não é notarizado. Use `npm run pack` para gerar o aplicativo sem instalador.
 
-Consulte o [guia do Electron](../desktop/README.md) para detalhes de compilação, armazenamento e testes.
+Consulte o [guia do Electron](../desktop/README.pt-BR.md) para detalhes de compilação, armazenamento e testes.
 
 ### Terminal ou Finder
 
@@ -138,6 +150,8 @@ python3 claude_sync.py sync --live
 ```
 
 Ou abra `sync.command` pelo Finder. Depois reabra o Claude e entre na conta desejada.
+
+`sync --live` sincroniza todos os perfis e projetos locais detectados. Informa as quantidades, divergências pendentes, históricos indisponíveis, problemas com arquivos e local do backup. Pode copiar um registro de catálogo mesmo que falte o histórico, mas não pode reconstruir o conteúdo de uma conversa ausente.
 
 ## Windows
 
@@ -183,6 +197,8 @@ Use `npm.cmd run pack` no Windows para gerar o aplicativo sem instalador.
 3. Reabra o Claude pelo menu Iniciar e troque de conta.
 
 Também é possível clicar duas vezes em `sync.cmd` no Explorador de Arquivos depois de encerrar o Claude. Se `py` não estiver disponível, mas `python` estiver no PATH, substitua `py -3` por `python`. A sincronização dos seus próprios dados normalmente não exige privilégios de administrador.
+
+### Pastas de dados no Windows
 
 A ferramenta procura o catálogo em `%APPDATA%\Claude\claude-code-sessions` e nas pastas de dados do Claude instalado por MSIX, quando existirem. Os históricos normalmente ficam em `%USERPROFILE%\.claude\projects`.
 
@@ -237,7 +253,13 @@ Encerre completamente o Claude Desktop e termine os terminais ativos do Claude C
 python3 claude_sync.py sync --live
 ```
 
-Reabra o Claude pelo menu de aplicativos ou execute `claude-desktop`, depois troque de conta. O catálogo padrão fica em `${XDG_CONFIG_HOME:-~/.config}/Claude/claude-code-sessions`; os históricos ficam em `~/.claude/projects`. O aplicativo respeita `XDG_CONFIG_HOME` e `XDG_DATA_HOME` quando definidos como caminhos absolutos. Se suas pastas forem diferentes, selecione-as nas configurações ou use `--app-data` e `--projects-dir` antes do comando na ferramenta de terminal.
+Reabra o Claude pelo menu de aplicativos ou execute `claude-desktop`, depois troque de conta. O catálogo padrão fica em `${XDG_CONFIG_HOME:-~/.config}/Claude/claude-code-sessions`; os históricos ficam em `~/.claude/projects`. O aplicativo respeita `XDG_CONFIG_HOME` e `XDG_DATA_HOME` quando definidos como caminhos absolutos.
+
+Se suas pastas forem diferentes, selecione-as nas configurações ou use as opções globais da ferramenta de terminal antes do comando:
+
+```sh
+python3 claude_sync.py --app-data "/caminho/Claude" --projects-dir "/caminho/.claude/projects" sync --live
+```
 
 A sincronização no Linux é experimental. Os testes automatizados e a prévia não verificam a sincronização autenticada no Claude Desktop em uma máquina Linux.
 
@@ -255,7 +277,7 @@ No Windows:
 py -3 claude_sync.py sync --live --storage-dir "$env:LOCALAPPDATA\Claude Code User Sync\Backups"
 ```
 
-O aplicativo Electron mantém os backups do macOS em `~/Library/Application Support/Claude Account Sync/Backups/`. O nome interno antigo foi preservado para manter a compatibilidade. No Windows, os backups ficam em `%LOCALAPPDATA%\Claude Code User Sync\Backups\`; no Linux, em `${XDG_DATA_HOME:-~/.local/share}/Claude Code User Sync/Backups/`. O Electron guarda suas preferências na pasta padrão de dados do aplicativo; consulte o [guia](../desktop/README.md#storage).
+O aplicativo Electron mantém os backups do macOS em `~/Library/Application Support/Claude Account Sync/Backups/`. O nome interno antigo foi preservado para manter a compatibilidade. No Windows, os backups ficam em `%LOCALAPPDATA%\Claude Code User Sync\Backups\`; no Linux, em `${XDG_DATA_HOME:-~/.local/share}/Claude Code User Sync/Backups/`. O Electron guarda suas preferências na pasta padrão de dados do aplicativo; consulte o [guia](../desktop/README.pt-BR.md#armazenamento).
 
 Os backups incluem o catálogo, os arquivos originais necessários para desfazer e um manifesto dos arquivos vinculados. As cópias disponíveis ficam em `asset-snapshot/`. No macOS e Linux, as permissões são exclusivas do usuário. No Windows, os backups herdam as permissões da pasta que os contém; use uma pasta dentro do seu perfil, sem compartilhamento.
 
@@ -315,9 +337,24 @@ npm test
 python3 -m unittest discover
 ```
 
-No Windows: `py -3 -m unittest discover` para os testes Python. Os testes usam dados sintéticos. O [guia do aplicativo](../desktop/README.md#tests-and-preview) inclui os comandos de prévia e empacotamento. O [README em inglês](../README.md#development-and-tests) explica a validação opcional com o SDK da Anthropic.
+No Windows, use `npm.cmd test` e `py -3 -m unittest discover`. O GitHub Actions está configurado para executar testes Python com dados sintéticos no macOS, Windows e Linux, testar o fluxo do Electron e as traduções, e gerar um backend empacotado e um aplicativo sem instalador em cada plataforma. O [guia do aplicativo](../desktop/README.pt-BR.md#testes-e-prévia) inclui os comandos de prévia e empacotamento.
 
-A interface compartilhada usa **i18next** e dicionários JSON em `desktop/locales/` para inglês, espanhol e português brasileiro. As mesmas chaves atendem macOS, Windows e Linux, e os testes verificam a cobertura. Por padrão, **Idioma do sistema** usa o idioma compatível preferido do sistema operacional. As variantes regionais de inglês e espanhol usam as respectivas traduções; todas as variantes de português usam português brasileiro. Se nenhum idioma preferido tiver tradução, o aplicativo usa inglês. A escolha manual é salva entre aberturas; selecione **Idioma do sistema** para voltar à seleção automática.
+A interface compartilhada usa **i18next** e dicionários JSON em `desktop/locales/` para inglês, espanhol e português brasileiro. As mesmas chaves atendem macOS, Windows e Linux, e os testes verificam a cobertura e as variáveis de interpolação. Por padrão, **Idioma do sistema** usa o idioma compatível preferido do sistema operacional. As variantes regionais de inglês e espanhol usam as respectivas traduções; todas as variantes de português usam português brasileiro. Se nenhum idioma preferido tiver tradução, o aplicativo usa inglês. A escolha manual é salva entre aberturas; selecione **Idioma do sistema** para voltar à seleção automática.
+
+As suítes usam catálogos e históricos sintéticos. Cobrem várias contas, perfis novos, sincronizações repetidas, conflitos, marcadores de exclusão, recuperação de artifacts, verificação de arquivos, planos desatualizados, reversão e o fluxo desktop.
+
+Para uma verificação adicional de leitura com a versão fixa do Anthropic Agent SDK:
+
+```sh
+npm ci
+
+node validate_sessions.mjs \
+  --sandbox .sandbox/demo \
+  --profile account-1/org-local \
+  --out .sandbox/demo/validation.json
+```
+
+Escolha uma pasta de perfil que exista no catálogo copiado. No PowerShell do Windows, use `npm.cmd ci` e coloque o comando `node` inteiro em uma linha. O validador lê os históricos copiados, limpa variáveis de ambiente de credenciais e bloqueia operações de rede e subprocessos durante a verificação. Informa quantidades e hashes sem imprimir mensagens. Esse validador opcional usa o SDK com versão fixa; o aplicativo Electron não o usa durante a sincronização.
 
 ## Privacidade e limites
 

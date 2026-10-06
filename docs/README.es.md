@@ -23,7 +23,7 @@ La herramienta no transfiere chats entre cuentas en la nube ni entre equipos, y 
 
 ## Requisitos
 
-- macOS 13 o posterior, Windows 10/11 o Ubuntu 22.04+/Debian 12+, con Claude Desktop y conversaciones locales en la pestaña Code. Consulta la [guía oficial de la beta Linux](https://code.claude.com/docs/en/desktop-linux); admite x64 y arm64.
+- macOS 13 o posterior, Windows 10/11 o Ubuntu 22.04+/Debian 12+, con Claude Desktop y conversaciones locales en la pestaña Code. Consulta la [guía de instalación para macOS/Windows](https://support.claude.com/en/articles/10065433-install-claude-desktop) o la [guía oficial de la beta Linux](https://code.claude.com/docs/en/desktop-linux). Linux admite x64 y arm64.
 - Al menos dos perfiles de cuenta inicializados localmente. Inicia sesión en cada cuenta, abre Code, selecciona el entorno Local y crea una conversación en ese equipo.
 - Para ejecutar desde el código fuente: **Node.js 22.12 o posterior**, npm y **Python 3.10 o posterior**. El motor Python solo usa la biblioteca estándar. En macOS, usa una instalación de Python compatible con tu versión de macOS.
 - Las compilaciones empaquetadas incluyen Electron y Python. El equipo de destino no necesita instalar Node.js ni Python aparte. Una compilación para macOS puede necesitar una versión posterior a macOS 13, según el Python usado para compilarla.
@@ -77,7 +77,19 @@ bash ./setup.sh --check
 .\setup.bat --check
 ```
 
-Para instalar los requisitos que falten y preparar las dependencias del código fuente sin abrir la aplicación, sustituye `--check` por `--no-launch`. En Linux, esto también omite la compilación e instalación del paquete de la aplicación. Para iniciar desde el código fuente, vuelve a ejecutar el script cuando quieras abrir la aplicación. La preparación manual y el desarrollo siguen disponibles a continuación.
+La comprobación termina correctamente si los requisitos están listos; si falta algo, lo indica y termina con el código de salida 1. Para instalar los requisitos que falten y preparar las dependencias del código fuente sin abrir la aplicación:
+
+```sh
+# macOS / Linux
+bash ./setup.sh --no-launch
+```
+
+```powershell
+# Windows
+.\setup.bat --no-launch
+```
+
+En Linux, `--no-launch` también omite la compilación e instalación del paquete de la aplicación. Añade `--help` a cualquiera de los lanzadores para consultar las opciones disponibles. Para iniciar desde el código fuente, vuelve a ejecutar el script cuando quieras abrir la aplicación. La preparación manual y el desarrollo siguen disponibles a continuación.
 
 ### Preparación manual para desarrolladores
 
@@ -127,7 +139,7 @@ npm run build:mac
 
 Genera un DMG y un ZIP en `release/` para la arquitectura del Mac actual. La compilación crea un entorno Python aislado y empaqueta el motor con PyInstaller. Registra el requisito de macOS a partir de Electron y del Python incluido, usando la versión mínima más reciente de los dos. La aplicación recibe una firma local ad hoc y no está notarizada. Usa `npm run pack` para generar una aplicación sin instalador.
 
-Consulta la [guía de Electron](../desktop/README.md) para más detalles de compilación, almacenamiento y pruebas.
+Consulta la [guía de Electron](../desktop/README.es.md) para más detalles de compilación, almacenamiento y pruebas.
 
 ### Terminal o Finder
 
@@ -138,6 +150,8 @@ python3 claude_sync.py sync --live
 ```
 
 O abre `sync.command` desde Finder. Después vuelve a abrir Claude e inicia sesión en la cuenta deseada.
+
+`sync --live` sincroniza todos los perfiles y proyectos locales detectados. Informa de las cantidades, diferencias pendientes, historiales no disponibles, problemas con archivos y ubicación de la copia de seguridad. Puede copiar un registro de catálogo aunque falte el historial, pero no puede reconstruir el contenido de una conversación ausente.
 
 ## Windows
 
@@ -183,6 +197,8 @@ Usa `npm.cmd run pack` en Windows para generar una aplicación sin instalador.
 3. Vuelve a abrir Claude desde el menú Inicio y cambia de cuenta.
 
 También puedes hacer doble clic en `sync.cmd` en el Explorador de archivos después de salir de Claude. Si `py` no está disponible, pero `python` está en el PATH, sustituye `py -3` por `python`. La sincronización de tus propios datos normalmente no necesita permisos de administrador.
+
+### Carpetas de datos en Windows
 
 La herramienta busca el catálogo en `%APPDATA%\Claude\claude-code-sessions` y en las carpetas de datos del Claude instalado por MSIX, cuando existan. Los historiales suelen estar en `%USERPROFILE%\.claude\projects`.
 
@@ -237,7 +253,13 @@ Cierra Claude Desktop por completo y termina los terminales activos de Claude Co
 python3 claude_sync.py sync --live
 ```
 
-Abre Claude desde el menú de aplicaciones o ejecuta `claude-desktop`, luego cambia de cuenta. El catálogo estándar está en `${XDG_CONFIG_HOME:-~/.config}/Claude/claude-code-sessions`; los historiales están en `~/.claude/projects`. La aplicación respeta `XDG_CONFIG_HOME` y `XDG_DATA_HOME` cuando se definen como rutas absolutas. Si tus carpetas son distintas, selecciónalas en los ajustes o usa `--app-data` y `--projects-dir` antes del comando en la herramienta de terminal.
+Abre Claude desde el menú de aplicaciones o ejecuta `claude-desktop`, luego cambia de cuenta. El catálogo estándar está en `${XDG_CONFIG_HOME:-~/.config}/Claude/claude-code-sessions`; los historiales están en `~/.claude/projects`. La aplicación respeta `XDG_CONFIG_HOME` y `XDG_DATA_HOME` cuando se definen como rutas absolutas.
+
+Si tus carpetas son distintas, selecciónalas en los ajustes o usa las opciones globales de la herramienta de terminal antes del comando:
+
+```sh
+python3 claude_sync.py --app-data "/ruta/Claude" --projects-dir "/ruta/.claude/projects" sync --live
+```
 
 La sincronización en Linux es experimental. Las pruebas automatizadas y la vista previa no verifican la sincronización autenticada de Claude Desktop en un equipo Linux.
 
@@ -255,7 +277,7 @@ En Windows:
 py -3 claude_sync.py sync --live --storage-dir "$env:LOCALAPPDATA\Claude Code User Sync\Backups"
 ```
 
-La aplicación Electron mantiene las copias de macOS en `~/Library/Application Support/Claude Account Sync/Backups/`. Se conserva el nombre interno anterior por compatibilidad. En Windows, las copias están en `%LOCALAPPDATA%\Claude Code User Sync\Backups\`; en Linux, están en `${XDG_DATA_HOME:-~/.local/share}/Claude Code User Sync/Backups/`. Electron guarda sus preferencias en su carpeta estándar de datos; consulta la [guía](../desktop/README.md#storage).
+La aplicación Electron mantiene las copias de macOS en `~/Library/Application Support/Claude Account Sync/Backups/`. Se conserva el nombre interno anterior por compatibilidad. En Windows, las copias están en `%LOCALAPPDATA%\Claude Code User Sync\Backups\`; en Linux, están en `${XDG_DATA_HOME:-~/.local/share}/Claude Code User Sync/Backups/`. Electron guarda sus preferencias en su carpeta estándar de datos; consulta la [guía](../desktop/README.es.md#almacenamiento).
 
 Las copias incluyen el catálogo, los archivos originales necesarios para deshacer y un manifiesto de los archivos vinculados. Las copias de archivos disponibles están en `asset-snapshot/`. En macOS y Linux, los permisos son exclusivos del usuario. En Windows, las copias heredan los permisos de su carpeta; usa una ubicación dentro de tu perfil, sin compartir.
 
@@ -315,9 +337,24 @@ npm test
 python3 -m unittest discover
 ```
 
-En Windows: `py -3 -m unittest discover` para las pruebas Python. Las pruebas usan datos sintéticos. La [guía de la aplicación](../desktop/README.md#tests-and-preview) incluye los comandos de vista previa y empaquetado. El [README en inglés](../README.md#development-and-tests) explica la validación opcional con el SDK de Anthropic.
+En Windows, usa `npm.cmd test` y `py -3 -m unittest discover`. GitHub Actions está configurado para ejecutar pruebas Python con datos sintéticos en macOS, Windows y Linux, probar el flujo de Electron y las traducciones, y generar un backend empaquetado y una aplicación sin instalador en cada plataforma. La [guía de la aplicación](../desktop/README.es.md#pruebas-y-vista-previa) incluye los comandos de vista previa y empaquetado.
 
-La interfaz compartida usa **i18next** y diccionarios JSON en `desktop/locales/` para inglés, español y portugués brasileño. Las claves son iguales en macOS, Windows y Linux, y las pruebas comprueban su cobertura. Por defecto, **Idioma del sistema** usa el idioma compatible preferido del sistema operativo. Las variantes regionales de inglés y español usan las traducciones correspondientes; todas las variantes de portugués usan portugués brasileño. Si ninguno de los idiomas preferidos tiene traducción, la aplicación usa inglés. Se guarda la elección manual entre aperturas; selecciona **Idioma del sistema** para volver a la selección automática.
+La interfaz compartida usa **i18next** y diccionarios JSON en `desktop/locales/` para inglés, español y portugués brasileño. Las claves son iguales en macOS, Windows y Linux, y las pruebas comprueban su cobertura y las variables de interpolación. Por defecto, **Idioma del sistema** usa el idioma compatible preferido del sistema operativo. Las variantes regionales de inglés y español usan las traducciones correspondientes; todas las variantes de portugués usan portugués brasileño. Si ninguno de los idiomas preferidos tiene traducción, la aplicación usa inglés. Se guarda la elección manual entre aperturas; selecciona **Idioma del sistema** para volver a la selección automática.
+
+Las suites usan catálogos e historiales sintéticos. Cubren varias cuentas, perfiles nuevos, sincronizaciones repetidas, conflictos, marcadores de eliminación, recuperación de artifacts, comprobación de archivos, planes obsoletos, restauración y el flujo de escritorio.
+
+Para una comprobación adicional de lectura con la versión fija de Anthropic Agent SDK:
+
+```sh
+npm ci
+
+node validate_sessions.mjs \
+  --sandbox .sandbox/demo \
+  --profile account-1/org-local \
+  --out .sandbox/demo/validation.json
+```
+
+Elige una carpeta de perfil que exista en el catálogo copiado. En PowerShell de Windows, usa `npm.cmd ci` y pon el comando `node` completo en una línea. El validador lee los historiales copiados, limpia las variables de entorno de credenciales y bloquea las operaciones de red y subprocesos durante la comprobación. Informa de cantidades y hashes sin imprimir mensajes. Este validador opcional usa el SDK con versión fija; la aplicación Electron no lo usa durante la sincronización.
 
 ## Privacidad y límites
 
