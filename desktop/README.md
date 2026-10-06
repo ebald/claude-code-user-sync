@@ -1,17 +1,17 @@
 # Claude Code User Sync desktop app
 
-A shared Electron interface for macOS and Windows, backed by the existing Python synchronization engine. The main [README](../README.md) explains the scope of synchronization and the command-line tool.
+A shared Electron interface for macOS, Windows and Linux, backed by the existing Python synchronization engine. The main [README](../README.md) explains the scope of synchronization and the command-line tool.
 
 ## Run from source
 
-Use macOS 13 or newer or Windows 10/11. Install Node.js 22.12 or newer, npm and Python 3.10 or newer. For source launches on macOS, your Python installation must also support your macOS version. From the repository root:
+Use macOS 13 or newer, Windows 10/11, or Ubuntu 22.04+/Debian 12+ with the official [Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux). Linux supports x64 and arm64. Install Node.js 22.12 or newer, npm and Python 3.10 or newer. For source launches on macOS, your Python installation must also support your macOS version. From the repository root:
 
 ```sh
 npm ci
 npm start
 ```
 
-In Windows PowerShell, use `npm.cmd` in place of `npm` in the commands in this guide. On macOS, the app locates `python3`. On Windows, install the Python launcher and confirm `py -3 --version` in a new PowerShell window. Run the app in native Windows, outside WSL.
+In Windows PowerShell, use `npm.cmd` in place of `npm` in the commands in this guide. On macOS and Linux, the app locates `python3`. On Windows, install the Python launcher and confirm `py -3 --version` in a new PowerShell window. Run the app in native Windows, outside WSL.
 
 The setup downloads Electron and build dependencies. The app loads its interface, translations and synchronization engine locally; synchronization does not make model calls or upload your chats.
 
@@ -19,53 +19,57 @@ The setup downloads Electron and build dependencies. The app loads its interface
 
 1. Initialize both accounts in Claude Desktop: sign in to each, open Code, select the Local environment and create a local conversation on this computer.
 2. Finish active work in Claude before starting a sync.
-3. Select **English**, **Español** or **Português** in the language selector.
+3. Keep **System language** selected to follow your operating system’s language, or choose **English**, **Español** or **Português**.
 4. Click **Sync and reopen Claude**.
 5. After Claude reopens, sign out and sign in to the account you want to use.
 
-The app requests a normal shutdown, waits up to 30 seconds and checks that Claude has stopped before writing catalogs. It does not force-kill Claude. Account switching remains manual. The same interface and workflow serve both platforms; the platform-specific backend handles Claude discovery and shutdown.
+The app requests a normal shutdown, waits up to 30 seconds and checks that Claude has stopped before writing catalogs. On Linux, automatic shutdown is available for the verified official Claude Desktop installation; finish active Claude Code terminals too. If shutdown cannot be requested safely or processes remain active, quit Claude completely and try again. It does not force-kill Claude. Account switching remains manual. The same interface and workflow serve all three platforms; the platform-specific backend handles Claude discovery and shutdown.
 
 The account count comes from local account directories, rather than the number of organization profiles. A single account can contain more than one organization profile.
 
-Successful synchronization uses a success status. Unavailable files, histories or unresolved differences are stated specifically and can be reviewed in diagnostics. The file and backup controls open the saved result in Finder or File Explorer. If automatic Claude discovery fails on Windows, select the Claude executable through the app.
+Successful synchronization uses a success status. Unavailable files, histories or unresolved differences are stated specifically and can be reviewed in diagnostics. The file and backup controls open the saved result in your operating system’s file manager. If automatic Claude discovery fails, select the Claude application or executable through the app.
 
-Windows synchronization remains experimental until the authenticated Claude Desktop workflow is verified on a real Windows computer.
+Windows and Linux synchronization remain experimental until the authenticated Claude Desktop workflow is verified on real computers running those systems.
 
 ## Languages
 
 **i18next** manages the interface translations using JSON dictionaries in `desktop/locales/`:
 
-- `en`: English, the default.
+- `en`: English.
 - `es`: Spanish.
 - `pt-BR`: Brazilian Portuguese.
 
-Use the same keys and interpolation placeholders in all dictionaries. Translation coverage is checked by the JavaScript tests. Selecting a language updates the interface and saves the preference for future launches. Filenames, diagnostic details and paths remain as recorded by the backend.
+The app starts with **System language** selected and uses the operating system’s preferred supported language. Regional English and Spanish variants use the matching translation; every Portuguese variant uses Brazilian Portuguese. If none of the preferred languages is supported, the app falls back to English. Choosing a language manually updates the interface and saves the preference for future launches. Select **System language** to follow the operating system again.
+
+Use the same keys and interpolation placeholders in all dictionaries. Translation coverage is checked by the JavaScript tests. Filenames, diagnostic details and paths remain as recorded by the backend.
 
 ## Storage
 
 The app saves language and selected paths in `settings.json` in its own user-data directory. The platform-specific synchronization engine preserves the existing backup and history locations for compatibility:
 
-| Data | macOS | Windows |
-| --- | --- | --- |
-| App preferences | `~/Library/Application Support/Claude Code User Sync/settings.json` | `%APPDATA%\Claude Code User Sync\settings.json` |
-| Synchronization backups | `~/Library/Application Support/Claude Account Sync/Backups/` | `%LOCALAPPDATA%\Claude Code User Sync\Backups\` |
-| Saved synchronization result | `~/Library/Application Support/Claude Account Sync/last-sync.json` | `%LOCALAPPDATA%\Claude Code User Sync\last-sync.json` |
-| Claude catalog, standard install | `~/Library/Application Support/Claude/claude-code-sessions/` | `%APPDATA%\Claude\claude-code-sessions\` |
-| Local conversation transcripts | `~/.claude/projects/` | `%USERPROFILE%\.claude\projects\` |
+| Data | macOS | Windows | Linux default |
+| --- | --- | --- | --- |
+| App preferences | `~/Library/Application Support/Claude Code User Sync/settings.json` | `%APPDATA%\Claude Code User Sync\settings.json` | `~/.config/Claude Code User Sync/settings.json` |
+| Synchronization backups | `~/Library/Application Support/Claude Account Sync/Backups/` | `%LOCALAPPDATA%\Claude Code User Sync\Backups\` | `~/.local/share/Claude Code User Sync/Backups/` |
+| Saved synchronization result | `~/Library/Application Support/Claude Account Sync/last-sync.json` | `%LOCALAPPDATA%\Claude Code User Sync\last-sync.json` | `~/.local/share/Claude Code User Sync/last-sync.json` |
+| Claude catalog, standard install | `~/Library/Application Support/Claude/claude-code-sessions/` | `%APPDATA%\Claude\claude-code-sessions\` | `~/.config/Claude/claude-code-sessions/` |
+| Local conversation transcripts | `~/.claude/projects/` | `%USERPROFILE%\.claude\projects\` | `~/.claude/projects/` |
+
+Linux honors absolute `XDG_CONFIG_HOME` and `XDG_DATA_HOME` for its configuration and application data; the table shows their defaults. The official Linux command `claude-desktop` resolves to the executable under `/usr/lib/claude-desktop/`.
 
 Windows MSIX installations can use a different Claude data directory, which the backend checks when present. If installations are ambiguous, select the Claude data directory and chat-history directory in the app settings. The [CLI data overrides](../README.md#windows-data-locations) allow an explicit data directory.
 
-Backups and diagnostic files can contain private conversation data, paths and links. On macOS they use owner-only permissions; on Windows they inherit their parent directory's access permissions. Keep them inside your own user profile. The older macOS storage name is intentional so that existing backups remain available.
+Backups and diagnostic files can contain private conversation data, paths and links. On macOS and Linux they use owner-only permissions; on Windows they inherit their parent directory's access permissions. Keep them inside your own user profile. The older macOS storage name is intentional so that existing backups remain available.
 
 ## Build packaged apps
 
-Build on the target operating system. The Python runtime produced on macOS cannot run on Windows, or vice versa.
+Build on the target operating system and architecture. Each package includes a Python executable built for that platform.
 
 ```sh
 npm run build:backend
 ```
 
-This runs `desktop/scripts/build_backend.py`, creates an isolated virtual environment under `.sandbox/electron-backend/venv/`, installs a pinned PyInstaller version and creates a self-contained backend under `desktop/backend-dist/claude-sync-backend/`. These generated directories are excluded from Git.
+This runs `desktop/scripts/build_backend.py`, creates an isolated virtual environment under `.sandbox/electron-backend/<platform>-<arch>/venv/`, installs a pinned PyInstaller version and creates a self-contained backend under `desktop/backend-dist/claude-sync-backend/`. These generated directories are excluded from Git.
 
 ### macOS
 
@@ -87,9 +91,21 @@ npm.cmd run build:win
 
 The command bundles the backend and builds an NSIS installer in `release/`. The installed app includes Electron, Python and translations. The destination computer does not need Node.js or Python separately. The installer is unsigned.
 
+### Linux
+
+On native Ubuntu 22.04+/Debian 12+, use x64 or arm64 Node.js and Python for the current computer. Build on the oldest supported distribution you intend to target (Ubuntu 22.04 is the baseline); packages built on a newer system or with a newer Python runtime may require newer Linux libraries.
+
+```sh
+npm run build:linux
+```
+
+On Ubuntu 24.04 and newer, AppArmor may block Electron startup from source or from the portable archive. If startup fails with a sandbox error, install the `.deb` package, which includes an AppArmor profile for this app. You can create it with `npm run build:linux` without launching the source app first. See [Ubuntu’s release notes](https://documentation.ubuntu.com/release-notes/24.04/).
+
+Install `python3-venv` if your distribution does not provide Python’s virtual-environment support by default. The build includes the Python backend and creates a Debian `.deb` installer and portable `.tar.gz` archive in `release/`. The destination computer does not need Node.js or Python installed separately. Open the `.deb` with your software installer, or extract the portable archive and run `claude-code-user-sync` as your normal user. Use the official [Claude Desktop Linux beta guide](https://code.claude.com/docs/en/desktop-linux) to install Claude itself.
+
 ### Unpacked app
 
-On either target platform:
+On any target platform:
 
 ```sh
 npm run pack
@@ -119,7 +135,7 @@ npm run smoke:packaged
 
 The smoke checks launch the source or packaged Electron app in preview mode, exercise all three languages and the simulated synchronization workflow, and check the success status.
 
-GitHub Actions is configured to run synthetic Python tests on macOS and Windows, run the Electron tests, build a self-contained backend and package an unpacked app on each operating system. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
+GitHub Actions is configured to run synthetic Python tests on macOS, Windows and Linux, run the Electron tests, build a self-contained backend and package an unpacked app on each operating system. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
 
 ## Architecture
 

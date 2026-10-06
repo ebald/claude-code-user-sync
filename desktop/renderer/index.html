@@ -11,7 +11,7 @@
   <script src="summary.js" defer></script>
   <script src="renderer.js" defer></script>
 </head>
-<body>
+<body data-booting="true">
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <symbol id="icon-sync" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></symbol>
     <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 1-8 8H5l-3 3v-8a8 8 0 1 1 18-3Z"/><path d="M7 9h8M7 13h5"/></symbol>
@@ -64,7 +64,7 @@
 
     <footer class="app-footer">
       <p id="last-sync-date" class="last-sync-date"></p>
-      <div class="footer-controls"><label class="language-control"><span data-i18n="language"></span><select id="language-select" aria-label="Language"><option value="en">English</option><option value="es">Español</option><option value="pt-BR">Português</option></select></label><button id="settings-button" class="icon-button" type="button" aria-label="Settings" title="Settings"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg></button><button id="open-claude-button" class="text-button open-claude" type="button" data-i18n="openClaude"></button></div>
+      <div class="footer-controls"><label class="language-control"><span data-i18n="language"></span><select id="language-select" aria-label="Language"><option value="system" data-i18n="systemLanguage"></option><option value="en">English</option><option value="es">Español</option><option value="pt-BR">Português</option></select></label><button id="settings-button" class="icon-button" type="button" aria-label="Settings" title="Settings"><svg class="icon" aria-hidden="true"><use href="#icon-settings"/></svg></button><button id="open-claude-button" class="text-button open-claude" type="button" data-i18n="openClaude"></button></div>
     </footer>
   </main>
 

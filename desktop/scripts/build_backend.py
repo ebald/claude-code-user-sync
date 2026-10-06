@@ -16,8 +16,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arch", choices=("arm64", "x64"), required=True)
     args = parser.parse_args()
-    if sys.platform not in ("darwin", "win32") or sys.version_info < (3, 10):
-        parser.error("Build on macOS or Windows using Python 3.10 or newer.")
+    if sys.platform not in ("darwin", "win32", "linux") or sys.version_info < (3, 10):
+        parser.error("Build on macOS, Windows or Linux using Python 3.10 or newer.")
     machine = platform.machine().lower()
     actual_arch = "arm64" if machine in ("arm64", "aarch64") else "x64" if machine in ("amd64", "x86_64") else machine
     if actual_arch != args.arch:

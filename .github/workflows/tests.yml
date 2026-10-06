@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2022]
+        os: [macos-15, windows-2022, ubuntu-22.04]
         python-version: ["3.10", "3.14"]
     steps:
       - name: Check out source
@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2022]
+        os: [macos-15, windows-2022, ubuntu-22.04]
     steps:
       - name: Check out source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -62,14 +62,23 @@ jobs:
           python-version: "3.14"
       - name: Install locked dependencies
         run: npm ci
+      - name: Install Linux desktop test dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2 libgbm1 libxss1
       - name: Run Electron workflow and translation tests
         run: npm test
       - name: Check source app in read-only preview mode
+        if: runner.os != 'Linux'
         run: npm run smoke
+      - name: Check source Linux app in read-only preview mode
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run smoke
       - name: Build unpacked app with bundled backend
         run: npm run pack
-      - name: Check packaged backend on macOS without live data
-        if: runner.os == 'macOS'
+      - name: Check packaged backend on macOS and Linux without live data
+        if: runner.os != 'Windows'
         run: desktop/backend-dist/claude-sync-backend/claude-sync-backend --help
       - name: Check packaged backend on Windows without live data
         if: runner.os == 'Windows'
@@ -78,4 +87,11 @@ jobs:
           & ".\desktop\backend-dist\claude-sync-backend\claude-sync-backend.exe" --help
           if ($LASTEXITCODE -ne 0) { throw "The packaged backend could not load." }
       - name: Check packaged app in read-only preview mode
+        if: runner.os != 'Linux'
         run: npm run smoke:packaged
+      - name: Check packaged Linux app in read-only preview mode
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run smoke:packaged
+      - name: Build Linux installer and portable archive
+        if: runner.os == 'Linux'
+        run: npm exec -- electron-builder --config desktop/scripts/builder-config.cjs --linux --publish never

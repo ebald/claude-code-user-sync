@@ -7,13 +7,14 @@ const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const { BackendClient } = require('./backend-client.cjs');
 const { SyncWorkflow, WorkflowError } = require('./workflow.cjs');
+const { LANGUAGE_PREFERENCES, resolveLanguage } = require('./language.cjs');
 
 app.setName('Claude Code User Sync');
+if (process.platform === 'linux') app.setDesktopName('com.baker.claude-account-sync.desktop');
 app.setPath('userData', path.join(app.getPath('appData'), app.name));
 const preview = process.argv.includes('--preview');
 const smoke = process.argv.includes('--smoke-test');
 if (smoke && !preview) app.exit(2);
-const languages = new Set(['en', 'es', 'pt-BR']);
 const entry = path.join(__dirname, 'renderer', 'index.html');
 const entryURL = pathToFileURL(entry).href;
 const settingsFile = path.join(app.getPath('userData'), 'settings.json');
@@ -22,7 +23,7 @@ let window;
 let backend;
 let operationBusy = false;
 let storageDir = null;
-const state = { preview, language: 'en', accounts: null, phase: 'ready', running: false,
+const state = { preview, platform: process.platform, language: 'en', languagePreference: 'system', accounts: null, phase: 'ready', running: false,
   lastSync: null, error: null, notice: null };
 
 function checkNoLinks(target) {
@@ -36,18 +37,24 @@ function checkNoLinks(target) {
   }
 }
 
+function preferredSystemLanguages() {
+  try { return app.getPreferredSystemLanguages(); }
+  catch { return []; }
+}
+
 function loadSettings() {
-  if (preview) return;
-  try {
-    checkNoLinks(settingsFile);
-    const value = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      for (const key of ['language', 'appData', 'projectsDir', 'claudeExecutable']) {
-        if (typeof value[key] === 'string') settings[key] = value[key];
+  if (!preview) {
+    try {
+      checkNoLinks(settingsFile);
+      const value = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        for (const key of ['language', 'appData', 'projectsDir', 'claudeExecutable']) {
+          if (typeof value[key] === 'string') settings[key] = value[key];
+        }
       }
-    }
-  } catch { /* Fresh or unreadable preferences use the defaults. */ }
-  state.language = languages.has(settings.language) ? settings.language : 'en';
+    } catch { /* Fresh or unreadable preferences follow the system language. */ }
+  }
+  Object.assign(state, resolveLanguage(settings.language, preferredSystemLanguages()));
 }
 
 function saveSettings() {
@@ -183,13 +190,14 @@ async function reveal(files) {
 async function choose(kind) {
   if (preview) return publish();
   const executable = kind === 'claudeExecutable';
+  const extension = process.platform === 'darwin' ? 'app' : process.platform === 'win32' ? 'exe' : null;
   const result = await dialog.showOpenDialog(window, {
     properties: [executable ? 'openFile' : 'openDirectory'],
-    ...(executable ? { filters: [{ name: 'Claude', extensions: [process.platform === 'darwin' ? 'app' : 'exe'] }] } : {}),
+    ...(executable && extension ? { filters: [{ name: 'Claude', extensions: [extension] }] } : {}),
   });
   if (result.canceled || !result.filePaths.length) return publish();
   const selected = result.filePaths[0];
-  if (executable && !selected.toLowerCase().endsWith(process.platform === 'darwin' ? '.app' : '.exe')) throw new WorkflowError('PATH_INVALID', 'Choose the installed Claude application.');
+  if (executable && extension && !selected.toLowerCase().endsWith('.' + extension)) throw new WorkflowError('PATH_INVALID', 'Choose the installed Claude application.');
   settings[kind] = selected;
   saveSettings();
   if (!executable) {
@@ -223,10 +231,13 @@ function createWindow() {
 
 async function runSmoke() {
   try {
+    const expectedSystemLanguage = resolveLanguage('system', preferredSystemLanguages()).language;
     const result = await window.webContents.executeJavaScript(`(async () => {
       const pause = () => new Promise(resolve => setTimeout(resolve, 15));
-      for (let attempt = 0; attempt < 200 && document.body.dataset.connected !== 'true'; attempt++) await pause();
-      if (document.body.dataset.connected !== 'true') throw new Error('Renderer did not connect');
+      for (let attempt = 0; attempt < 200 && (document.body.dataset.connected !== 'true' || document.body.dataset.booting !== 'false'); attempt++) await pause();
+      if (document.body.dataset.connected !== 'true' || document.body.dataset.booting !== 'false') throw new Error('Renderer did not connect');
+      const initialState = await window.syncApi.getState();
+      if (initialState.languagePreference !== 'system' || initialState.language !== ${JSON.stringify(expectedSystemLanguage)}) throw new Error('Initial language does not match the operating system');
       const languages = ['en', 'es', 'pt-BR'];
       for (const language of languages) {
         const select = document.getElementById('language-select');
@@ -244,8 +255,14 @@ async function runSmoke() {
       if (!title.includes('1') || !title.toLowerCase().includes('conclu')) throw new Error('Missing localized success result');
       const state = await window.syncApi.getState();
       if (!state.preview || state.lastSync.result.accounts !== state.accounts) throw new Error('Preview account count is inconsistent');
+      const select = document.getElementById('language-select');
+      select.value = 'system';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      for (let attempt = 0; attempt < 200 && (document.body.dataset.language !== initialState.language || select.disabled); attempt++) await pause();
+      const restored = await window.syncApi.getState();
+      if (restored.languagePreference !== 'system' || restored.language !== initialState.language) throw new Error('Returning to system language failed');
       if (typeof window.require !== 'undefined' || typeof window.process !== 'undefined') throw new Error('Renderer exposed Node');
-      return { languages, phase: document.body.dataset.phase, localizedSuccess: true, actualAccountCount: true, isolatedRenderer: true };
+      return { languages, phase: document.body.dataset.phase, localizedSuccess: true, actualAccountCount: true, isolatedRenderer: true, systemLanguage: initialState.language, automaticLanguage: true };
     })()`);
     console.log(JSON.stringify({ smoke: 'passed', packaged: app.isPackaged, ...result }));
     app.exit(0);
@@ -265,9 +282,10 @@ else {
     menu();
     handle('sync:state', () => publish());
     handle('sync:start', sync, { idle: true });
-    handle('sync:language', language => {
-      if (!languages.has(language)) throw new WorkflowError('SETTINGS_FAILED', 'Choose a supported language.');
-      state.language = language; settings.language = language; saveSettings(); menu(); return publish();
+    handle('sync:language', preference => {
+      if (!LANGUAGE_PREFERENCES.has(preference)) throw new WorkflowError('SETTINGS_FAILED', 'Choose a supported language.');
+      Object.assign(state, resolveLanguage(preference, preferredSystemLanguages()));
+      settings.language = state.languagePreference; saveSettings(); menu(); return publish();
     }, { idle: true });
     handle('sync:open', openClaude, { idle: true });
     handle('sync:files', () => reveal(true), { idle: true });

@@ -6,10 +6,13 @@ const root = path.resolve(__dirname, '../..');
 let executable;
 let args;
 if (process.argv.includes('--packaged')) {
-  const directory = process.platform === 'win32' ? 'win-unpacked' : process.arch === 'arm64' ? 'mac-arm64' : 'mac';
+  const directory = process.platform === 'win32' ? 'win-unpacked'
+    : process.platform === 'linux' ? (process.arch === 'arm64' ? 'linux-arm64-unpacked' : 'linux-unpacked')
+      : process.arch === 'arm64' ? 'mac-arm64' : 'mac';
   executable = process.platform === 'win32'
     ? path.join(root, 'release', directory, 'Claude Code User Sync.exe')
-    : path.join(root, 'release', directory, 'Claude Code User Sync.app/Contents/MacOS/Claude Code User Sync');
+    : process.platform === 'linux' ? path.join(root, 'release', directory, 'claude-code-user-sync')
+      : path.join(root, 'release', directory, 'Claude Code User Sync.app/Contents/MacOS/Claude Code User Sync');
   args = ['--preview', '--smoke-test'];
 } else {
   executable = require('electron');

@@ -4,7 +4,7 @@
 
 [English](../README.md) · [Español](README.es.md) · Português
 
-O Claude Code User Sync sincroniza os catálogos de conversas da **aba Code do Claude Desktop** entre as contas detectadas no computador. Inclui um aplicativo Electron compartilhado por macOS e Windows e uma ferramenta Python, com backup automático e opção de desfazer alterações. O aplicativo oferece inglês, espanhol e português.
+O Claude Code User Sync sincroniza os catálogos de conversas da **aba Code do Claude Desktop** entre as contas detectadas no computador. Inclui um aplicativo Electron compartilhado por macOS, Windows e Linux e uma ferramenta Python, com backup automático e opção de desfazer alterações. O aplicativo oferece inglês, espanhol e português.
 
 Se você criou uma conversa local na conta A, a sincronização permite que o registro apareça também na conta B. O histórico permanece no armazenamento local compartilhado; a ferramenta atualiza os registros usados na lista de chats de cada conta.
 
@@ -23,7 +23,7 @@ A ferramenta não transfere chats entre contas na nuvem ou computadores e não s
 
 ## Requisitos
 
-- macOS 13 ou mais recente, ou Windows 10/11, com Claude Desktop e conversas locais na aba Code.
+- macOS 13 ou mais recente, Windows 10/11 ou Ubuntu 22.04+/Debian 12+, com Claude Desktop e conversas locais na aba Code. Consulte o [guia oficial do beta Linux](https://code.claude.com/docs/en/desktop-linux); ele oferece x64 e arm64.
 - Pelo menos dois perfis de conta inicializados localmente. Entre em cada conta, abra a aba Code, selecione o ambiente Local e crie uma conversa nesse computador.
 - Para executar pelo código-fonte: **Node.js 22.12 ou mais recente**, npm e **Python 3.10 ou mais recente**. O motor Python usa somente a biblioteca padrão. No macOS, use uma instalação de Python compatível com sua versão do macOS.
 - Os aplicativos empacotados incluem Electron e Python. O computador de destino não precisa instalar Node.js nem Python separadamente. Uma compilação para macOS pode exigir uma versão mais recente que o macOS 13, dependendo do Python usado para compilá-la.
@@ -32,12 +32,13 @@ A ferramenta não transfere chats entre contas na nuvem ou computadores e não s
 | --- | --- | --- |
 | macOS | Aplicativo Electron para a arquitetura do Mac usado na compilação | Testes automatizados e prévia locais; o fluxo autenticado depende do formato interno do Claude Desktop |
 | Windows | A mesma interface Electron e instalador Windows x64 | Experimental; a sincronização autenticada no Claude Desktop ainda não foi verificada em uma máquina Windows |
+| Linux | A mesma interface Electron, com instalador Debian e arquivo portátil para a arquitetura da máquina de compilação | Experimental; a sincronização autenticada no Claude Desktop ainda não foi verificada em uma máquina Linux |
 
 No Windows, use o PowerShell normal, fora do WSL. Compile no sistema de destino para incluir o executável Python adequado.
 
 ## Obter o código-fonte
 
-Instale [Git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/en/download) e [Python](https://www.python.org/downloads/) se necessário. No Terminal do macOS ou no PowerShell do Windows:
+Instale [Git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/en/download) e [Python](https://www.python.org/downloads/) se necessário. No Terminal do macOS ou Linux, ou no PowerShell do Windows:
 
 ```sh
 git clone https://github.com/ebald/claude-code-user-sync.git
@@ -60,7 +61,7 @@ npm start
 ### Usar o aplicativo
 
 1. Termine as tarefas em andamento no Claude.
-2. Escolha **Português** no seletor de idioma; a escolha será salva.
+2. O aplicativo abre no idioma compatível preferido do sistema operacional. Mantenha **Idioma do sistema** para seguir essa configuração ou escolha **English**, **Español** ou **Português**; a escolha manual será salva.
 3. Clique no botão de sincronização e reabertura.
 4. Aguarde o Claude fechar, os catálogos sincronizarem e o Claude reabrir.
 5. Faça logout e login na outra conta dentro do Claude.
@@ -107,7 +108,7 @@ Ou abra `sync.command` pelo Finder. Depois reabra o Claude e entre na conta dese
    npm.cmd start
    ```
 
-Escolha o idioma, termine suas tarefas no Claude e clique no botão de sincronização e reabertura. O aplicativo solicita o encerramento normal, verifica se o Claude parou, sincroniza e tenta reabri-lo. Não força o encerramento. A troca de conta permanece manual. Se o Claude não for encontrado automaticamente, é possível selecionar seu executável.
+O aplicativo segue automaticamente o idioma do sistema operacional. Você pode alterá-lo no seletor de idioma. Termine suas tarefas no Claude e clique no botão de sincronização e reabertura. O aplicativo solicita o encerramento normal, verifica se o Claude parou, sincroniza e tenta reabri-lo. Não força o encerramento. A troca de conta permanece manual. Se o Claude não for encontrado automaticamente, é possível selecionar seu executável.
 
 Para testar sem alterar os dados do Claude:
 
@@ -152,6 +153,51 @@ A ferramenta não transfere conversas entre máquinas nem entre usuários difere
 
 No Windows, a verificação de arquivos aceita arquivos comuns em unidades locais. Compartilhamentos de rede, junctions, links simbólicos e arquivos de nuvem que ainda sejam reparse points são recusados. Disponibilize os arquivos necessários como arquivos locais comuns antes de sincronizar.
 
+## Linux
+
+Use Ubuntu 22.04 ou mais recente ou Debian 12 ou mais recente, com uma sessão gráfica x64 ou arm64. Instale o Claude Desktop pelo [guia oficial do beta Linux](https://code.claude.com/docs/en/desktop-linux) e inicialize conversas locais na aba Code de cada conta. Execute o aplicativo como seu usuário normal.
+
+Instale Node.js 22.12 ou mais recente, npm e Python 3.10 ou mais recente. Para compilar no Ubuntu ou Debian, instale também `python3-venv`. Na pasta do projeto:
+
+```sh
+node --version
+python3 --version
+npm ci
+npm start
+```
+
+No Ubuntu 24.04 ou mais recente, o AppArmor pode impedir que o Electron abra pelo código-fonte ou pelo arquivo portátil. Se a abertura falhar com um erro de sandbox, instale o pacote `.deb`, que inclui um perfil AppArmor para este aplicativo. É possível criá-lo com `npm run build:linux` sem abrir primeiro o aplicativo pelo código-fonte. Consulte as [notas da versão do Ubuntu](https://documentation.ubuntu.com/release-notes/24.04/).
+
+O aplicativo segue automaticamente o idioma do sistema, com o mesmo seletor usado no macOS e Windows. Termine suas tarefas no Claude e os terminais ativos do Claude Code, depois clique no botão de sincronização e reabertura. Na instalação oficial para Linux, o aplicativo solicita o encerramento normal e espera até 30 segundos. Se não puder solicitar o encerramento com segurança ou o Claude Code continuar ativo, pede que você encerre completamente o Claude e tente novamente. Não força o encerramento dos processos. Depois que o Claude reabrir, troque de conta manualmente.
+
+Para testar a interface sem alterar dados do Claude:
+
+```sh
+npm run preview
+```
+
+### Compilar pacotes Linux
+
+Compile em um computador Linux com Node.js e Python para a arquitetura desse computador. Use a distribuição compatível mais antiga que pretende atender (Ubuntu 22.04 é a base); pacotes compilados em um sistema mais recente ou com um Python mais recente podem exigir bibliotecas Linux mais recentes.
+
+```sh
+npm run build:linux
+```
+
+A compilação inclui o motor Python e gera um **instalador Debian `.deb`** e um **arquivo portátil `.tar.gz`** em `release/`. Abra o `.deb` no instalador de programas da distribuição, ou extraia o arquivo portátil e execute `claude-code-user-sync` como seu usuário normal. Os pacotes incluem Electron, Python, sincronizador e traduções. Use `npm run pack` para gerar o aplicativo sem instalador.
+
+### Terminal e pastas de dados no Linux
+
+Encerre completamente o Claude Desktop e termine os terminais ativos do Claude Code, depois execute:
+
+```sh
+python3 claude_sync.py sync --live
+```
+
+Reabra o Claude pelo menu de aplicativos ou execute `claude-desktop`, depois troque de conta. O catálogo padrão fica em `${XDG_CONFIG_HOME:-~/.config}/Claude/claude-code-sessions`; os históricos ficam em `~/.claude/projects`. O aplicativo respeita `XDG_CONFIG_HOME` e `XDG_DATA_HOME` quando definidos como caminhos absolutos. Se suas pastas forem diferentes, selecione-as nas configurações ou use `--app-data` e `--projects-dir` antes do comando na ferramenta de terminal.
+
+A sincronização no Linux é experimental. Os testes automatizados e a prévia não verificam a sincronização autenticada no Claude Desktop em uma máquina Linux.
+
 ## Backups e reversão
 
 A ferramenta de linha de comando salva cada operação em `.sandbox/sync-ID/` dentro do projeto. Para escolher outro local:
@@ -166,9 +212,9 @@ No Windows:
 py -3 claude_sync.py sync --live --storage-dir "$env:LOCALAPPDATA\Claude Code User Sync\Backups"
 ```
 
-O aplicativo Electron mantém os backups do macOS em `~/Library/Application Support/Claude Account Sync/Backups/`. O nome interno antigo foi preservado para manter a compatibilidade. No Windows, os backups ficam em `%LOCALAPPDATA%\Claude Code User Sync\Backups\`. O Electron guarda suas preferências na pasta padrão de dados do aplicativo; consulte o [guia](../desktop/README.md#storage).
+O aplicativo Electron mantém os backups do macOS em `~/Library/Application Support/Claude Account Sync/Backups/`. O nome interno antigo foi preservado para manter a compatibilidade. No Windows, os backups ficam em `%LOCALAPPDATA%\Claude Code User Sync\Backups\`; no Linux, em `${XDG_DATA_HOME:-~/.local/share}/Claude Code User Sync/Backups/`. O Electron guarda suas preferências na pasta padrão de dados do aplicativo; consulte o [guia](../desktop/README.md#storage).
 
-Os backups incluem o catálogo, os arquivos originais necessários para desfazer e um manifesto dos arquivos vinculados. As cópias disponíveis ficam em `asset-snapshot/`. No macOS, as permissões são exclusivas do usuário. No Windows, os backups herdam as permissões da pasta que os contém; use uma pasta dentro do seu perfil, sem compartilhamento.
+Os backups incluem o catálogo, os arquivos originais necessários para desfazer e um manifesto dos arquivos vinculados. As cópias disponíveis ficam em `asset-snapshot/`. No macOS e Linux, as permissões são exclusivas do usuário. No Windows, os backups herdam as permissões da pasta que os contém; use uma pasta dentro do seu perfil, sem compartilhamento.
 
 Para desfazer no macOS, feche o Claude e use o caminho de backup indicado pela operação:
 
@@ -183,6 +229,15 @@ No Windows, para o local padrão:
 
 ```powershell
 py -3 claude_sync.py undo --root "$env:APPDATA\Claude\claude-code-sessions" --backup ".sandbox\sync-OPERATION_ID\backup" --live
+```
+
+No Linux, com o Claude encerrado:
+
+```sh
+python3 claude_sync.py undo \
+  --root "${XDG_CONFIG_HOME:-$HOME/.config}/Claude/claude-code-sessions" \
+  --backup .sandbox/sync-OPERATION_ID/backup \
+  --live
 ```
 
 Substitua `OPERATION_ID` pelo identificador real. Para outro local, informe o caminho completo do backup. Instalações MSIX ou personalizadas exigem o mesmo `--app-data` antes de `undo` e a pasta de catálogo correspondente em `--root`. A reversão recusa sobrescrever registros alterados depois da sincronização.
@@ -219,7 +274,7 @@ python3 -m unittest discover
 
 No Windows: `py -3 -m unittest discover` para os testes Python. Os testes usam dados sintéticos. O [guia do aplicativo](../desktop/README.md#tests-and-preview) inclui os comandos de prévia e empacotamento. O [README em inglês](../README.md#development-and-tests) explica a validação opcional com o SDK da Anthropic.
 
-A interface compartilhada usa **i18next** e dicionários JSON em `desktop/locales/` para inglês, espanhol e português brasileiro. As mesmas chaves atendem macOS e Windows, os testes verificam a cobertura e a seleção do idioma é salva entre aberturas.
+A interface compartilhada usa **i18next** e dicionários JSON em `desktop/locales/` para inglês, espanhol e português brasileiro. As mesmas chaves atendem macOS, Windows e Linux, e os testes verificam a cobertura. Por padrão, **Idioma do sistema** usa o idioma compatível preferido do sistema operacional. As variantes regionais de inglês e espanhol usam as respectivas traduções; todas as variantes de português usam português brasileiro. Se nenhum idioma preferido tiver tradução, o aplicativo usa inglês. A escolha manual é salva entre aberturas; selecione **Idioma do sistema** para voltar à seleção automática.
 
 ## Privacidade e limites
 

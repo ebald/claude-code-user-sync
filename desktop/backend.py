@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import signal
 import subprocess
 import sys
 import time
@@ -29,13 +30,14 @@ from asset_audit import assert_no_links, is_link
 CLAUDE_BUNDLE_ID = "com.anthropic.claudefordesktop"
 ERROR_MESSAGES = {
     "INVALID_ARGUMENTS": "The application supplied an invalid request.",
-    "UNSUPPORTED_PLATFORM": "The desktop application supports macOS and Windows.",
+    "UNSUPPORTED_PLATFORM": "The desktop application supports macOS, Windows, and Linux.",
     "PATH_INVALID": "A selected local directory is unavailable or unsafe. Check the application settings.",
     "CLAUDE_NOT_FOUND": "Could not find Claude. Choose its application file and try again.",
     "NO_CHATS": "No local Claude Code chats were found on this computer.",
     "CATALOG_INVALID": "Could not validate the local chat catalogs. No chats were changed.",
     "PROCESS_CHECK_FAILED": "Could not confirm that Claude has closed. No chats were changed.",
     "CLOSE_FAILED": "Claude is still running. Finish any active tasks, close Claude, and try again.",
+    "CLAUDE_RUNNING": "Finish any active tasks, quit Claude and any running Claude Code processes, and try again.",
     "OPEN_FAILED": "Claude did not reopen. Use Open Claude to try again.",
     "SYNC_BUSY": "Another synchronization is already running. Wait for it to finish before opening Claude.",
     "SYNC_FAILED": "Synchronization could not finish. Check the backup before trying again.",
@@ -138,6 +140,50 @@ def mac_process_state(*, run=None, timeout=30):
         return desktop, any_claude
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, UnicodeError) as error:
         raise BackendError("PROCESS_CHECK_FAILED") from error
+
+
+def linux_process_state(**options):
+    try:
+        return sync_platform.linux_process_state(**options)
+    except RuntimeError as error:
+        raise BackendError("PROCESS_CHECK_FAILED") from error
+
+
+def request_linux_shutdown(process_ids):
+    """The official Linux app handles SIGTERM by calling Electron app.quit().
+
+    A pidfd binds each request to the process inspected here, preventing a reused
+    numeric PID from receiving a signal. Unsupported kernels/Python versions and
+    unverified application builds require the user to quit manually instead.
+    """
+    if not process_ids:
+        return
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        raise BackendError("CLAUDE_RUNNING")
+    handles = []
+    try:
+        for pid in sorted(process_ids):
+            try:
+                handle = os.pidfd_open(pid, 0)
+            except ProcessLookupError:
+                continue
+            handles.append(handle)
+            try:
+                verified = sync_platform.verified_linux_main(pid)
+            except FileNotFoundError:
+                continue
+            if not verified:
+                raise BackendError("CLAUDE_RUNNING")
+        for handle in handles:
+            try:
+                signal.pidfd_send_signal(handle, signal.SIGTERM, None, 0)
+            except ProcessLookupError:
+                pass
+    except (OSError, ValueError) as error:
+        raise BackendError("CLAUDE_RUNNING") from error
+    finally:
+        for handle in handles:
+            os.close(handle)
 
 
 def request_windows_shutdown(process_ids):
@@ -247,15 +293,34 @@ def discover_windows_application(executable=None, *, environ=None, run=None):
     raise BackendError("CLAUDE_NOT_FOUND")
 
 
+def validate_linux_executable(path):
+    path = Path(path).expanduser().absolute()
+    if path.name != "claude-desktop" or not path.is_file() or not os.access(path, os.X_OK):
+        raise BackendError("CLAUDE_NOT_FOUND")
+    return ("exe", str(path))
+
+
+def discover_linux_application(executable=None):
+    if executable is not None:
+        return validate_linux_executable(executable)
+    # The official .deb installs this launcher and its native executable. Do not
+    # choose an arbitrary command from a mutable PATH or execute a shell.
+    for path in (Path("/usr/bin/claude-desktop"), sync_platform.LINUX_CLAUDE_EXECUTABLE):
+        try:
+            return validate_linux_executable(path)
+        except BackendError:
+            pass
+    raise BackendError("CLAUDE_NOT_FOUND")
+
+
 class DesktopBackend:
     def __init__(self, *, app_data=None, projects_dir=None, storage_dir=None,
                  claude_executable=None, platform=None):
         self.platform = sys.platform if platform is None else platform
-        windows = self.platform == "win32"
         try:
-            self.app_data = Path(app_data).expanduser().absolute() if app_data else sync_platform.default_app_data(windows=windows)
+            self.app_data = Path(app_data).expanduser().absolute() if app_data else sync_platform.default_app_data(platform=self.platform)
             self.projects = Path(projects_dir).expanduser().absolute() if projects_dir else Path.home() / ".claude/projects"
-            self.storage = Path(storage_dir).expanduser().absolute() if storage_dir else sync_platform.sync_storage_directory(windows=windows)
+            self.storage = Path(storage_dir).expanduser().absolute() if storage_dir else sync_platform.sync_storage_directory(platform=self.platform)
             assert_no_links(self.app_data)
             assert_no_links(self.projects)
             assert_no_links(self.storage)
@@ -264,7 +329,7 @@ class DesktopBackend:
         self.executable = claude_executable
 
     def supported_platform(self):
-        if self.platform not in ("darwin", "win32"):
+        if self.platform not in ("darwin", "win32", "linux"):
             raise BackendError("UNSUPPORTED_PLATFORM")
 
     def inspect(self, *, accounts_only=False):
@@ -277,8 +342,11 @@ class DesktopBackend:
 
     def launch_target(self):
         self.supported_platform()
-        return (discover_windows_application(self.executable) if self.platform == "win32"
-                else discover_mac_application(self.executable))
+        if self.platform == "win32":
+            return discover_windows_application(self.executable)
+        if self.platform == "linux":
+            return discover_linux_application(self.executable)
+        return discover_mac_application(self.executable)
 
     def preflight(self):
         self.supported_platform()
@@ -305,6 +373,11 @@ class DesktopBackend:
         deadline = time.monotonic() + 30
         if self.platform == "win32":
             request_windows_shutdown(windows_process_ids(timeout=30))
+        elif self.platform == "linux":
+            processes = linux_process_state(timeout=30)
+            if processes.any_claude and not processes.main:
+                raise BackendError("CLAUDE_RUNNING")
+            request_linux_shutdown(processes.main)
         else:
             desktop, _ = mac_process_state(timeout=30)
             if desktop:
@@ -318,8 +391,9 @@ class DesktopBackend:
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise BackendError("CLOSE_FAILED")
+                raise BackendError("CLAUDE_RUNNING" if self.platform == "linux" else "CLOSE_FAILED")
             running = (bool(windows_process_ids(timeout=remaining)) if self.platform == "win32"
+                       else linux_process_state(timeout=remaining).any_claude if self.platform == "linux"
                        else mac_process_state(timeout=remaining)[1])
             if not running:
                 return {"closed": True}
@@ -337,7 +411,7 @@ class DesktopBackend:
             if any(text in message for text in ("verify that Claude is closed", "read the process list", "read the Windows process list")):
                 raise BackendError("PROCESS_CHECK_FAILED") from error
             if "Quit Claude completely" in message:
-                raise BackendError("CLOSE_FAILED") from error
+                raise BackendError("CLAUDE_RUNNING" if self.platform == "linux" else "CLOSE_FAILED") from error
             raise BackendError("SYNC_FAILED") from error
         result = result_summary(result)
         date = datetime.now(timezone.utc).isoformat()
@@ -371,6 +445,7 @@ class DesktopBackend:
                     if remaining <= 0:
                         raise BackendError("OPEN_FAILED")
                     running = (bool(windows_process_ids(timeout=remaining)) if self.platform == "win32"
+                               else bool(linux_process_state(timeout=remaining).desktop) if self.platform == "linux"
                                else mac_process_state(timeout=remaining)[0])
                     if running:
                         return {"opened": True}

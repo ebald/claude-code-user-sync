@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import io
 import json
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -178,6 +180,155 @@ class BackendTests(unittest.TestCase):
             backend.discover_windows_application(environ={"LOCALAPPDATA": str(self.base)},
                                                 run=mock.Mock(return_value=completed))
         self.assertEqual(caught.exception.code, "CLAUDE_NOT_FOUND")
+
+    def test_linux_defaults_use_native_platform_locations(self):
+        with mock.patch.object(backend.sync_platform, "default_app_data", return_value=self.app_data) as data, \
+                mock.patch.object(backend.sync_platform, "sync_storage_directory", return_value=self.storage) as storage:
+            driver = backend.DesktopBackend(platform="linux")
+        self.assertEqual(driver.app_data, self.app_data)
+        data.assert_called_once_with(platform="linux")
+        storage.assert_called_once_with(platform="linux")
+
+    def test_linux_discovery_accepts_executable_native_launcher_without_a_shell(self):
+        launcher = self.base / "claude-desktop"
+        launcher.write_bytes(b"synthetic executable")
+        launcher.chmod(0o700)
+        self.assertEqual(backend.discover_linux_application(launcher), ("exe", str(launcher)))
+        for path in (self.base / "other", self.base / "Claude.exe"):
+            path.write_bytes(b"synthetic executable")
+            path.chmod(0o700)
+            with self.assertRaises(backend.BackendError) as caught:
+                backend.discover_linux_application(path)
+            self.assertEqual(caught.exception.code, "CLAUDE_NOT_FOUND")
+        with mock.patch.object(backend, "validate_linux_executable", side_effect=[backend.BackendError("CLAUDE_NOT_FOUND"),
+                                                                                ("exe", "verified fixture")]) as validate:
+            self.assertEqual(backend.discover_linux_application(), ("exe", "verified fixture"))
+        self.assertEqual(validate.call_args_list[0].args[0], Path("/usr/bin/claude-desktop"))
+        self.assertEqual(validate.call_args_list[1].args[0], backend.sync_platform.LINUX_CLAUDE_EXECUTABLE)
+
+    def test_linux_process_errors_use_safe_bridge_error(self):
+        with mock.patch.object(backend.sync_platform, "linux_process_state", side_effect=RuntimeError("private path")):
+            with self.assertRaises(backend.BackendError) as caught:
+                backend.linux_process_state()
+        self.assertEqual(caught.exception.code, "PROCESS_CHECK_FAILED")
+        self.assertNotIn("private", str(caught.exception))
+
+    def test_linux_normal_quit_binds_signal_to_verified_process_handle(self):
+        events = []
+        def opened(pid, flags):
+            events.append(("opened", pid, flags))
+            return 123
+        def verified(pid):
+            events.append(("verified", pid))
+            return True
+        def signaled(handle, sig, info, flags):
+            events.append(("signaled", handle, sig, info, flags))
+        with mock.patch.object(backend.os, "pidfd_open", opened, create=True), \
+                mock.patch.object(backend.signal, "pidfd_send_signal", signaled, create=True), \
+                mock.patch.object(backend.sync_platform, "verified_linux_main", verified), \
+                mock.patch.object(backend.os, "close") as close, \
+                mock.patch.object(backend.os, "kill") as kill:
+            backend.request_linux_shutdown({42})
+        self.assertEqual(events, [("opened", 42, 0), ("verified", 42),
+                                  ("signaled", 123, backend.signal.SIGTERM, None, 0)])
+        close.assert_called_once_with(123)
+        kill.assert_not_called()
+
+    def test_linux_unverified_or_unsupported_shutdown_asks_for_manual_quit(self):
+        for verification in (False, PermissionError("private path")):
+            with self.subTest(verification=verification), \
+                    mock.patch.object(backend.os, "pidfd_open", return_value=123, create=True), \
+                    mock.patch.object(backend.signal, "pidfd_send_signal", create=True) as send, \
+                    mock.patch.object(backend.sync_platform, "verified_linux_main",
+                                      side_effect=verification if isinstance(verification, Exception) else None,
+                                      return_value=False), \
+                    mock.patch.object(backend.os, "close") as close, \
+                    mock.patch.object(backend.os, "kill") as kill:
+                with self.assertRaises(backend.BackendError) as caught:
+                    backend.request_linux_shutdown({42})
+                self.assertEqual(caught.exception.code, "CLAUDE_RUNNING")
+                send.assert_not_called()
+                kill.assert_not_called()
+                close.assert_called_once_with(123)
+        with mock.patch.object(backend, "hasattr", return_value=False, create=True), \
+                mock.patch.object(backend.os, "kill") as kill:
+            with self.assertRaises(backend.BackendError) as caught:
+                backend.request_linux_shutdown({42})
+        self.assertEqual(caught.exception.code, "CLAUDE_RUNNING")
+        kill.assert_not_called()
+
+    def test_linux_unavailable_kernel_pidfd_and_exited_process_never_use_numeric_signals(self):
+        for error in (OSError(errno.ENOSYS, "unavailable"), ProcessLookupError()):
+            with self.subTest(error=error), \
+                    mock.patch.object(backend.os, "pidfd_open", side_effect=error, create=True), \
+                    mock.patch.object(backend.signal, "pidfd_send_signal", create=True) as send, \
+                    mock.patch.object(backend.os, "kill") as kill:
+                if isinstance(error, ProcessLookupError):
+                    backend.request_linux_shutdown({42})
+                else:
+                    with self.assertRaises(backend.BackendError) as caught:
+                        backend.request_linux_shutdown({42})
+                    self.assertEqual(caught.exception.code, "CLAUDE_RUNNING")
+                send.assert_not_called()
+                kill.assert_not_called()
+
+    def test_linux_reused_or_unverified_second_pid_prevents_all_shutdown_requests(self):
+        with mock.patch.object(backend.os, "pidfd_open", side_effect=[123, 124], create=True), \
+                mock.patch.object(backend.signal, "pidfd_send_signal", create=True) as send, \
+                mock.patch.object(backend.sync_platform, "verified_linux_main", side_effect=[True, False]), \
+                mock.patch.object(backend.os, "close") as close:
+            with self.assertRaises(backend.BackendError) as caught:
+                backend.request_linux_shutdown({42, 43})
+        self.assertEqual(caught.exception.code, "CLAUDE_RUNNING")
+        send.assert_not_called()
+        self.assertEqual(close.call_args_list, [mock.call(123), mock.call(124)])
+
+    def test_linux_close_requests_verified_main_quit_then_waits_for_all_claude_processes(self):
+        self.driver.platform = "linux"
+        processes = backend.sync_platform.LinuxProcessState(frozenset({42, 43}), frozenset({42}), True)
+        closed = backend.sync_platform.LinuxProcessState(frozenset(), frozenset(), False)
+        with mock.patch.object(backend, "linux_process_state", side_effect=[processes, processes, closed]), \
+                mock.patch.object(backend, "request_linux_shutdown") as request, \
+                mock.patch.object(backend.time, "sleep"):
+            self.assertEqual(self.driver.close(), {"closed": True})
+        request.assert_called_once_with(frozenset({42}))
+
+    def test_linux_cli_or_nonstandard_desktop_requires_manual_quit_without_writes(self):
+        self.driver.platform = "linux"
+        processes = backend.sync_platform.LinuxProcessState(frozenset(), frozenset(), True)
+        with mock.patch.object(backend, "linux_process_state", return_value=processes), \
+                mock.patch.object(backend, "request_linux_shutdown") as request, \
+                mock.patch.object(claude_sync, "sync_accounts") as sync:
+            with self.assertRaises(backend.BackendError) as caught:
+                self.driver.close()
+        self.assertEqual(caught.exception.code, "CLAUDE_RUNNING")
+        request.assert_not_called()
+        sync.assert_not_called()
+
+    def test_linux_shutdown_timeout_does_not_force_terminate(self):
+        self.driver.platform = "linux"
+        processes = backend.sync_platform.LinuxProcessState(frozenset({42}), frozenset({42}), True)
+        with mock.patch.object(backend, "linux_process_state", return_value=processes), \
+                mock.patch.object(backend, "request_linux_shutdown"), \
+                mock.patch.object(backend.time, "monotonic", side_effect=[0, 31]), \
+                mock.patch.object(backend.os, "kill") as kill:
+            with self.assertRaises(backend.BackendError) as caught:
+                self.driver.close()
+        self.assertEqual(caught.exception.code, "CLAUDE_RUNNING")
+        kill.assert_not_called()
+
+    def test_linux_reopen_runs_only_selected_launcher_and_confirms_desktop_under_lock(self):
+        self.driver.platform = "linux"
+        closed = backend.sync_platform.LinuxProcessState(frozenset(), frozenset(), False)
+        opened = backend.sync_platform.LinuxProcessState(frozenset({42}), frozenset({42}), True)
+        with mock.patch.object(self.driver, "launch_target", return_value=("exe", "/usr/bin/claude-desktop")), \
+                mock.patch.object(claude_sync, "sync_lock", return_value=contextlib.nullcontext()), \
+                mock.patch.object(backend.subprocess, "Popen") as launch, \
+                mock.patch.object(backend, "linux_process_state", side_effect=[closed, opened]), \
+                mock.patch.object(backend.time, "sleep"):
+            self.assertEqual(self.driver.open(), {"opened": True})
+        self.assertEqual(launch.call_args.args[0], ["/usr/bin/claude-desktop"])
+        self.assertNotIn("shell", launch.call_args.kwargs)
 
     def test_windows_process_listing_is_oem_decoded_and_fails_closed(self):
         completed = subprocess.CompletedProcess([], 0, '"CLAUDE.EXE","42","Console","1","1 K"\n"other.exe","7","Console","1","2 K"', "")
@@ -385,7 +536,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.driver.inspect()["lastSync"]["result"], value["result"])
 
     def test_mutating_actions_refuse_unsupported_platform(self):
-        self.driver.platform = "linux"
+        self.driver.platform = "unsupported-test-platform"
         for action in ("preflight", "close", "sync", "open"):
             with self.subTest(action=action):
                 with self.assertRaises(backend.BackendError) as caught:

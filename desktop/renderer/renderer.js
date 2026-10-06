@@ -3,13 +3,41 @@
   'use strict';
   const api = window.syncApi;
   const allowedLanguages = new Set(['en', 'es', 'pt-BR']);
+  const allowedPreferences = new Set(['system', ...allowedLanguages]);
   const phases = ['closing', 'syncing', 'reopening'];
   const $ = (id) => document.getElementById(id);
-  let state = { preview: false, language: 'en', accounts: null, phase: 'ready', running: false, lastSync: null, error: null, notice: null };
+  let state = { preview: false, platform: null, language: 'en', languagePreference: 'system', accounts: null, phase: 'ready', running: false, lastSync: null, error: null, notice: null };
   let pendingAction = null;
+  let translationsReady = false;
+  let queuedState = null;
+
+  function mergeState(next) {
+    if (!next || typeof next !== 'object' || !('phase' in next)) return;
+    state = { ...state, ...next,
+      language: allowedLanguages.has(next.language) ? next.language : state.language,
+      languagePreference: allowedPreferences.has(next.languagePreference) ? next.languagePreference : state.languagePreference,
+    };
+  }
+
+  const unsubscribe = api ? api.onState((next) => {
+    if (!translationsReady) queuedState = next;
+    else applyState(next).catch(() => {});
+  }) : null;
+  window.addEventListener('beforeunload', () => { if (typeof unsubscribe === 'function') unsubscribe(); }, { once: true });
+  if (api) {
+    try {
+      mergeState(await api.getState());
+      document.body.dataset.connected = 'true';
+    } catch (error) {
+      state.error = { code: 'UNKNOWN', message: String(error && error.message || error) };
+    }
+  } else {
+    state.error = { code: 'UNKNOWN', message: 'The application connection is unavailable.' };
+  }
+  if (queuedState) mergeState(queuedState);
 
   await window.i18next.init({
-    lng: 'en', fallbackLng: 'en', supportedLngs: [...allowedLanguages],
+    lng: state.language, fallbackLng: 'en', supportedLngs: [...allowedLanguages],
     resources: window.SYNC_TRANSLATIONS,
     interpolation: { escapeValue: false },
     returnNull: false,
@@ -112,10 +140,11 @@
     document.documentElement.lang = state.language;
     document.body.dataset.language = state.language;
     document.body.dataset.phase = state.phase;
+    document.body.dataset.platform = state.platform || 'unknown';
     document.querySelectorAll('[data-i18n]').forEach((node) => { node.textContent = t(node.dataset.i18n); });
     document.querySelectorAll('.dialog-close').forEach((node) => { node.setAttribute('aria-label', t('close')); });
     document.querySelector('.workflow').setAttribute('aria-label', t('stepsLabel'));
-    $('language-select').value = state.language;
+    $('language-select').value = state.languagePreference;
     $('language-select').setAttribute('aria-label', t('language'));
     $('settings-button').title = t('settings');
     $('settings-button').setAttribute('aria-label', t('settings'));
@@ -162,7 +191,7 @@
 
   async function applyState(next) {
     if (!next || typeof next !== 'object' || !('phase' in next)) return;
-    state = { ...state, ...next, language: allowedLanguages.has(next.language) ? next.language : state.language };
+    mergeState(next);
     if (window.i18next.language !== state.language) await window.i18next.changeLanguage(state.language);
     render();
   }
@@ -184,7 +213,7 @@
 
   $('sync-button').addEventListener('click', () => invoke('sync'));
   $('language-select').addEventListener('change', (event) => {
-    if (event.target.value !== state.language) invoke('setLanguage', event.target.value);
+    if (event.target.value !== state.languagePreference) invoke('setLanguage', event.target.value);
   });
   for (const [id, method] of [['open-claude-button', 'openClaude'], ['files-button', 'showFiles'], ['backup-button', 'showBackup'], ['choose-claude-button', 'chooseClaude'], ['choose-data-button', 'chooseDataDirectory'], ['choose-projects-button', 'chooseProjectsDirectory']]) {
     $(id).addEventListener('click', () => invoke(method));
@@ -199,17 +228,8 @@
       invoke('sync');
     }
   });
-  render();
-  if (!api) {
-    state.error = { code: 'UNKNOWN', message: 'The application connection is unavailable.' };
-    render();
-    return;
-  }
-  const unsubscribe = api.onState((next) => { applyState(next).catch(() => {}); });
-  window.addEventListener('beforeunload', () => { if (typeof unsubscribe === 'function') unsubscribe(); }, { once: true });
-  try {
-    await applyState(await api.getState());
-    document.body.dataset.connected = 'true';
-  }
-  catch (error) { state.error = { code: 'UNKNOWN', message: String(error && error.message || error) }; render(); }
+  translationsReady = true;
+  if (queuedState) await applyState(queuedState);
+  else render();
+  document.body.dataset.booting = 'false';
 })();

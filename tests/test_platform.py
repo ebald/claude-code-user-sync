@@ -31,9 +31,9 @@ class PlatformLocationTests(unittest.TestCase):
         return path
 
     def test_macos_locations_keep_existing_compatibility_paths(self):
-        self.assertEqual(sync_platform.default_app_data(home=self.home, windows=False),
+        self.assertEqual(sync_platform.default_app_data(home=self.home, platform="darwin"),
                          self.home / "Library/Application Support/Claude")
-        self.assertEqual(sync_platform.sync_storage_directory(home=self.home, windows=False),
+        self.assertEqual(sync_platform.sync_storage_directory(home=self.home, platform="darwin"),
                          self.home / "Library/Application Support/Claude Account Sync")
 
     def test_windows_conventional_and_fallback_locations(self):
@@ -42,6 +42,25 @@ class PlatformLocationTests(unittest.TestCase):
                          self.home / "AppData/Roaming/Claude")
         self.assertEqual(sync_platform.sync_storage_directory(home=self.home, environ=self.env, windows=True),
                          self.home / "Local/Claude Code User Sync")
+
+    def test_linux_locations_use_xdg_defaults_and_absolute_overrides(self):
+        self.assertEqual(sync_platform.default_app_data(home=self.home, environ={}, platform="linux"),
+                         self.home / ".config/Claude")
+        self.assertEqual(sync_platform.sync_storage_directory(home=self.home, environ={}, platform="linux"),
+                         self.home / ".local/share/Claude Code User Sync")
+        env = {"XDG_CONFIG_HOME": str(self.home / "config"), "XDG_DATA_HOME": str(self.home / "data")}
+        self.assertEqual(sync_platform.default_app_data(home=self.home, environ=env, platform="linux"),
+                         self.home / "config/Claude")
+        self.assertEqual(sync_platform.sync_storage_directory(home=self.home, environ=env, platform="linux"),
+                         self.home / "data/Claude Code User Sync")
+        env.update(XDG_CONFIG_HOME="relative", XDG_DATA_HOME="relative")
+        self.assertEqual(sync_platform.default_app_data(home=self.home, environ=env, platform="linux"),
+                         self.home / ".config/Claude")
+        self.assertEqual(sync_platform.sync_storage_directory(home=self.home, environ=env, platform="linux"),
+                         self.home / ".local/share/Claude Code User Sync")
+        env["CLAUDE_USER_DATA_DIR"] = str(self.home / "explicit-claude-data")
+        self.assertEqual(sync_platform.default_app_data(home=self.home, environ=env, platform="linux"),
+                         self.home / "explicit-claude-data")
 
     def test_windows_msix_catalogue_is_selected_without_unrelated_packages(self):
         self.msix("Other_example")
@@ -145,11 +164,107 @@ class ProcessCheckTests(unittest.TestCase):
                      "/synthetic/.local/bin/claude"):
             with self.subTest(name=name):
                 with self.assertRaisesRegex(RuntimeError, "Cmd\\+Q"):
-                    sync_platform.assert_claude_closed(windows=False, run=mock.Mock(return_value=self.result(name)))
+                    sync_platform.assert_claude_closed(platform="darwin", run=mock.Mock(return_value=self.result(name)))
 
     def test_macos_browser_extension_host_does_not_block_sync(self):
         listing = "/Applications/Claude.app/Contents/Helpers/chrome-native-host\n/usr/bin/python3\n"
-        sync_platform.assert_claude_closed(windows=False, run=mock.Mock(return_value=self.result(listing)))
+        sync_platform.assert_claude_closed(platform="darwin", run=mock.Mock(return_value=self.result(listing)))
+
+
+class LinuxProcessTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.proc = Path(self.temp.name)
+        self.uid = os.getuid() if hasattr(os, "getuid") else 1000
+
+    def process(self, pid, executable, *arguments):
+        root = self.proc / str(pid)
+        root.mkdir()
+        # os.readlink is mocked so synthetic Windows runs need no symlink privilege.
+        (root / "cmdline").write_bytes(b"\0".join(argument.encode() for argument in arguments) + b"\0")
+        return executable
+
+    def state(self, listing, identities):
+        result = subprocess.CompletedProcess([], 0, listing, "")
+        def identity(pid, **_):
+            value = identities[pid]
+            if isinstance(value, Exception):
+                raise value
+            return Path(value[0]), [argument.encode() for argument in value[1:]]
+        with mock.patch.object(sync_platform, "linux_process_identity", side_effect=identity):
+            return sync_platform.linux_process_state(run=mock.Mock(return_value=result), uid=self.uid)
+
+    def test_official_main_helpers_and_cli_have_distinct_roles(self):
+        executable = str(sync_platform.LINUX_CLAUDE_EXECUTABLE)
+        state = self.state("42 claude-desktop\n43 claude-desktop\n44 claude\n45 node\n46 bash\n", {
+            42: (executable, "/usr/bin/claude-desktop"),
+            43: (executable, executable, "--type=renderer"),
+            44: ("/home/example/.local/share/claude/versions/1", "claude"),
+            45: ("/usr/bin/node", "node", "/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js"),
+        })
+        self.assertEqual(state.desktop, frozenset({42, 43}))
+        self.assertEqual(state.main, frozenset({42}))
+        self.assertTrue(state.any_claude)
+
+    def test_nonstandard_desktop_is_detected_but_never_authorized_for_signaling(self):
+        state = self.state("42 claude-desktop\n", {42: ("/tmp/claude-desktop", "claude-desktop")})
+        self.assertEqual(state.desktop, frozenset({42}))
+        self.assertFalse(state.main)
+        self.assertTrue(state.any_claude)
+
+    def test_split_helper_flag_and_empty_main_name_are_not_authorized(self):
+        executable = str(sync_platform.LINUX_CLAUDE_EXECUTABLE)
+        for arguments in ((executable, "--type", "gpu-process"), ("",)):
+            with self.subTest(arguments=arguments):
+                state = self.state("42 claude-desktop\n", {42: (executable, *arguments)})
+                self.assertFalse(state.main)
+                self.assertTrue(state.any_claude)
+
+    def test_exited_candidates_are_ignored_but_unreadable_candidates_block(self):
+        self.assertFalse(self.state("42 claude-desktop\n", {42: FileNotFoundError()}).any_claude)
+        with self.assertRaisesRegex(RuntimeError, "No live changes"):
+            self.state("42 claude-desktop\n", {42: PermissionError()})
+
+    def test_malformed_listings_and_failures_block_live_changes(self):
+        for value in ("", "not a process list", "0 claude-desktop", "42"):
+            with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, "No live changes"):
+                self.state(value, {})
+        with self.assertRaisesRegex(RuntimeError, "No live changes"):
+            sync_platform.linux_process_state(uid=self.uid, run=mock.Mock(side_effect=OSError()))
+
+    def test_cli_processes_block_sync_without_a_desktop_window(self):
+        state = self.state("42 node\n", {42: ("/usr/bin/node", "node", "/opt/@anthropic-ai/claude-code/cli.js")})
+        self.assertFalse(state.desktop)
+        self.assertTrue(state.any_claude)
+        with mock.patch.object(sync_platform, "linux_process_state", return_value=state):
+            with self.assertRaisesRegex(RuntimeError, "finish any running Claude Code"):
+                sync_platform.assert_claude_closed(platform="linux")
+
+    def test_unrelated_node_processes_do_not_block_sync(self):
+        self.assertFalse(self.state("42 node\n", {42: ("/usr/bin/node", "node", "/tmp/app.js")}).any_claude)
+
+    def test_node_cli_global_symlink_is_blocked_before_process_title_changes(self):
+        for script in ("/usr/local/bin/claude", "/home/example/.local/bin/claude"):
+            with self.subTest(script=script):
+                state = self.state("42 node\n", {42: ("/usr/bin/node", "node", script)})
+                self.assertTrue(state.any_claude)
+                self.assertFalse(state.desktop)
+
+    def test_native_identity_keeps_nul_separated_arguments_and_rejects_uncertainty(self):
+        self.process(42, "unused", "claude-desktop", "path with spaces", "--type=renderer")
+        root = self.proc / "42"
+        with mock.patch.object(sync_platform.os, "readlink", return_value="/usr/lib/claude-desktop/claude-desktop (deleted)"), \
+                mock.patch.object(Path, "stat", return_value=types.SimpleNamespace(st_uid=self.uid)):
+            executable, arguments = sync_platform.linux_process_identity(42, proc_root=self.proc, uid=self.uid)
+            self.assertEqual(executable, sync_platform.LINUX_CLAUDE_EXECUTABLE)
+            self.assertEqual(arguments, [b"claude-desktop", b"path with spaces", b"--type=renderer"])
+            (root / "cmdline").write_bytes(b"missing terminator")
+            with self.assertRaises(ValueError):
+                sync_platform.linux_process_identity(42, proc_root=self.proc, uid=self.uid)
+        with mock.patch.object(Path, "stat", return_value=types.SimpleNamespace(st_uid=self.uid + 1)):
+            with self.assertRaises(PermissionError):
+                sync_platform.linux_process_identity(42, proc_root=self.proc, uid=self.uid)
 
 
 class PlatformLockTests(unittest.TestCase):

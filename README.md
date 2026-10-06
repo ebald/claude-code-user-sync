@@ -4,7 +4,7 @@
 
 English · [Español](docs/README.es.md) · [Português](docs/README.pt-BR.md)
 
-Claude Code User Sync synchronizes the chat catalogs used by the **Code tab in Claude Desktop** across locally detected accounts. It includes one Electron desktop app for macOS and Windows, plus a Python command-line tool, with automatic backups and a way to undo changes. The app offers English, Spanish and Portuguese.
+Claude Code User Sync synchronizes the chat catalogs used by the **Code tab in Claude Desktop** across locally detected accounts. It includes one Electron desktop app for macOS, Windows and Linux, plus a Python command-line tool, with automatic backups and a way to undo changes. The app offers English, Spanish and Portuguese.
 
 For example, if you started a local Code conversation while signed in to account A, syncing makes its catalog entry available to account B too. The conversation history remains in the shared local storage; the tool updates the records that make it appear in each account's chat list.
 
@@ -24,7 +24,7 @@ This is a local utility. It does not transfer chats between cloud accounts or co
 
 ## Requirements and platform support
 
-- **macOS 13 or newer, or Windows 10/11**, with [Claude Desktop](https://support.claude.com/en/articles/10065433-install-claude-desktop) installed and local conversations in its Code tab.
+- **macOS 13 or newer, Windows 10/11, or Ubuntu 22.04+/Debian 12+**, with Claude Desktop installed and local conversations in its Code tab. Use the [macOS/Windows installation guide](https://support.claude.com/en/articles/10065433-install-claude-desktop) or the official [Linux beta guide](https://code.claude.com/docs/en/desktop-linux). Linux supports x64 and arm64.
 - At least two locally initialized Claude account profiles. Sign in to each account, open the Code tab, select the Local environment and create a conversation on that computer before syncing.
 - To run from source: **Node.js 22.12 or newer**, npm and **Python 3.10 or newer**. The Python synchronization engine uses only the standard library. On macOS, use a Python installation compatible with your macOS version.
 - Packaged builds include Electron and the Python engine; destination computers do not need Node.js or Python installed separately. A packaged macOS build may require a version newer than macOS 13, depending on the Python runtime used to build it.
@@ -33,12 +33,13 @@ This is a local utility. It does not transfer chats between cloud accounts or co
 | --- | --- | --- |
 | macOS | Electron app, built for the Mac's current architecture | Local automated tests and preview checks; authenticated workflows depend on Claude Desktop's internal format |
 | Windows | The same Electron interface; Windows x64 installer | Experimental; authenticated Claude Desktop synchronization has not yet been verified on a Windows machine |
+| Linux | The same Electron interface; Debian installer and portable archive for the build computer’s architecture | Experimental; authenticated Claude Desktop synchronization has not yet been verified on a Linux machine |
 
 Run Windows commands in regular Windows PowerShell, outside WSL. WSL, SSH and cloud sessions are excluded. Build the packaged app on its target operating system so it includes the correct Python executable.
 
 ## Get the source
 
-Install [Git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/en/download) and [Python](https://www.python.org/downloads/) if needed. Open Terminal on macOS or PowerShell on Windows:
+Install [Git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/en/download) and [Python](https://www.python.org/downloads/) if needed. Open a terminal on macOS or Linux, or PowerShell on Windows:
 
 ```sh
 git clone https://github.com/ebald/claude-code-user-sync.git
@@ -61,7 +62,7 @@ npm start
 ### Use the app
 
 1. Finish any running work in Claude.
-2. Choose **English**, **Español** or **Português** in the language selector. The app saves your choice between launches.
+2. The app starts in your operating system’s preferred supported language. Keep **System language** selected to follow that setting, or choose **English**, **Español** or **Português**; a manual choice is saved between launches.
 3. Click **Sync and reopen Claude**.
 4. Wait for Claude to close, the catalogs to synchronize and Claude to reopen.
 5. Sign out and sign in to the other account in Claude.
@@ -114,7 +115,7 @@ Alternatively, open `sync.command` from Finder. After synchronization, reopen Cl
    npm.cmd start
    ```
 
-Choose your language, finish active Claude tasks and click **Sync and reopen Claude**. The app requests a normal shutdown, checks that Claude has stopped, synchronizes and tries to reopen Claude. It does not force-kill Claude. Switch accounts manually after Claude reopens. The app can use a selected Claude executable if the installed app is not discovered automatically.
+The app automatically follows your operating system’s language. You can change it in the language selector. Finish active Claude tasks and click **Sync and reopen Claude**. The app requests a normal shutdown, checks that Claude has stopped, synchronizes and tries to reopen Claude. It does not force-kill Claude. Switch accounts manually after Claude reopens. The app can use a selected Claude executable if the installed app is not discovered automatically.
 
 To try the interface without changing Claude data:
 
@@ -157,9 +158,60 @@ If the catalog is missing or more than one installation is detected, choose the 
 py -3 claude_sync.py --app-data "C:\path\to\Claude" --projects-dir "C:\path\to\.claude\projects" sync --live
 ```
 
-Use the native Windows paths for the profiles you intend to synchronize. The tool does not copy conversations between Windows and macOS machines or between Windows user logins.
+Use the native Windows paths for the profiles you intend to synchronize. The tool does not copy conversations between computers or between operating system user logins.
 
 Windows asset checks currently support ordinary files on local drives. Network shares, junctions, symbolic links and cloud placeholder reparse points are refused. Make any needed cloud file available as a regular local file before syncing.
+
+## Linux instructions
+
+Use Ubuntu 22.04 or newer or Debian 12 or newer, with an x64 or arm64 desktop session. Install Claude Desktop using Anthropic’s [Linux beta installation guide](https://code.claude.com/docs/en/desktop-linux), then initialize local Code conversations in each account. Run the app as your normal desktop user.
+
+Install Node.js 22.12 or newer, npm and Python 3.10 or newer. For packaging on Ubuntu or Debian, also install the Python virtual-environment package, `python3-venv`. From the project folder:
+
+```sh
+node --version
+python3 --version
+npm ci
+npm start
+```
+
+On Ubuntu 24.04 and newer, AppArmor may block Electron startup from source or from the portable archive. If startup fails with a sandbox error, install the `.deb` package, which includes an AppArmor profile for this app. You can create it with `npm run build:linux` without launching the source app first. See [Ubuntu’s release notes](https://documentation.ubuntu.com/release-notes/24.04/).
+
+The app uses the operating system’s language automatically, with the same language selector as macOS and Windows. Finish active Claude tasks and any Claude Code terminals, then click **Sync and reopen Claude**. For the official Linux installation, the app requests normal shutdown and waits up to 30 seconds before synchronizing. If it cannot safely request shutdown or Claude Code remains active, it asks you to quit Claude completely and try again. It does not force-kill processes. After Claude reopens, switch accounts manually.
+
+To preview the interface without changing Claude data:
+
+```sh
+npm run preview
+```
+
+### Build Linux packages
+
+Build on a Linux computer using Node.js and Python for that computer’s architecture. Build on the oldest supported distribution you intend to target (Ubuntu 22.04 is the baseline); packages built on a newer system or with a newer Python runtime may require newer Linux libraries.
+
+```sh
+npm run build:linux
+```
+
+The build bundles the Python synchronization engine and creates a **Debian `.deb` installer** and a **portable `.tar.gz` archive** in `release/`. Open the `.deb` using your distribution’s software installer, or extract the portable archive and run its `claude-code-user-sync` executable as your normal user. Installed packages include Electron, Python, the backend and translations. Use `npm run pack` for an unpacked app directory.
+
+### Linux terminal and data locations
+
+Quit Claude Desktop completely and finish active Claude Code terminals, then run:
+
+```sh
+python3 claude_sync.py sync --live
+```
+
+Reopen Claude Desktop from your application launcher, or run `claude-desktop`, then switch accounts. The standard catalog is `${XDG_CONFIG_HOME:-~/.config}/Claude/claude-code-sessions`; conversation transcripts are under `~/.claude/projects`. The app respects an absolute `XDG_CONFIG_HOME` or `XDG_DATA_HOME` when configured.
+
+If the Claude data folder differs, select it in app settings, or use global CLI overrides before the command:
+
+```sh
+python3 claude_sync.py --app-data "/path/to/Claude" --projects-dir "/path/to/.claude/projects" sync --live
+```
+
+Linux synchronization is experimental. Automated tests and preview checks do not verify authenticated Claude Desktop synchronization on a Linux machine.
 
 ## Backups and undo
 
@@ -181,7 +233,7 @@ The Electron app keeps macOS backups under:
 ~/Library/Application Support/Claude Account Sync/Backups/
 ```
 
-The Windows app stores backups under `%LOCALAPPDATA%\Claude Code User Sync\Backups\`. The internal macOS storage name is retained for compatibility with earlier versions. The Electron app keeps its own preferences in its standard user-data directory; see the [app guide](desktop/README.md#storage) for details. Each operation includes a catalog snapshot, the original files needed for undo and an asset manifest. Available linked files are preserved under that operation's `asset-snapshot/` directory. On macOS, backup directories and files use owner-only permissions. Windows backups inherit the access permissions of their parent directory, so store them inside your own user profile rather than a shared folder.
+The Windows app stores backups under `%LOCALAPPDATA%\Claude Code User Sync\Backups\`; Linux uses `${XDG_DATA_HOME:-~/.local/share}/Claude Code User Sync/Backups/`. The internal macOS storage name is retained for compatibility with earlier versions. The Electron app keeps its own preferences in its standard user-data directory; see the [app guide](desktop/README.md#storage) for details. Each operation includes a catalog snapshot, the original files needed for undo and an asset manifest. Available linked files are preserved under that operation's `asset-snapshot/` directory. On macOS and Linux, backup directories and files use owner-only permissions. Windows backups inherit the access permissions of their parent directory, so store them inside your own user profile rather than a shared folder.
 
 To undo a live synchronization, quit Claude completely and use the exact backup path printed by that operation:
 
@@ -202,11 +254,22 @@ py -3 claude_sync.py undo --root "$env:APPDATA\Claude\claude-code-sessions" --ba
 
 For an MSIX or custom location, supply the same `--app-data` override before `undo` and use that directory's `claude-code-sessions` as `--root`.
 
+For Linux’s standard data location, quit Claude and run:
+
+```sh
+python3 claude_sync.py undo \
+  --root "${XDG_CONFIG_HOME:-$HOME/.config}/Claude/claude-code-sessions" \
+  --backup .sandbox/sync-OPERATION_ID/backup \
+  --live
+```
+
+Use the actual operation ID and the full backup path if the operation was run from the app.
+
 ## Try it on a local copy
 
 You can inspect and apply a plan to a private copy before changing the live catalogs. Use a new destination directory for each copy; keep Claude idle or closed while copying.
 
-The following examples use macOS shell syntax. A Windows PowerShell example is included below.
+The following examples use macOS/Linux shell syntax. A Windows PowerShell example is included below.
 
 ```sh
 python3 claude_sync.py sandbox --dest .sandbox/demo
@@ -264,9 +327,9 @@ npm test
 python3 -m unittest discover
 ```
 
-On Windows, use `py -3 -m unittest discover` for the Python suite. GitHub Actions is configured to run synthetic Python tests on both operating systems, test the Electron workflow and translations, and build a packaged backend and unpacked app on each platform.
+On Windows, use `py -3 -m unittest discover` for the Python suite. GitHub Actions is configured to run synthetic Python tests on macOS, Windows and Linux, test the Electron workflow and translations, and build a packaged backend and unpacked app on each platform.
 
-The desktop app uses **i18next** with English, Spanish and Brazilian Portuguese JSON dictionaries in `desktop/locales/`. One interface and the same translation keys serve macOS and Windows. Tests check language coverage and interpolation placeholders. English is the default, and the selected language persists between launches.
+The desktop app uses **i18next** with English, Spanish and Brazilian Portuguese JSON dictionaries in `desktop/locales/`. One interface and the same translation keys serve macOS, Windows and Linux. Tests check language coverage and interpolation placeholders. The default **System language** setting uses the operating system’s preferred supported language. English and Spanish regional variants use their matching translations; all Portuguese variants use Brazilian Portuguese. If none of the preferred languages is supported, the app uses English. A manual language choice persists between launches; select **System language** to return to automatic selection.
 
 The suites use synthetic catalogs and transcripts. They cover multiple accounts, new profiles, repeated syncs, conflict handling, deletion markers, artifact recovery, file checks, stale plans, undo and the desktop workflow. See the [app guide](desktop/README.md#tests-and-preview) for preview and packaging commands.
 
