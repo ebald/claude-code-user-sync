@@ -4,16 +4,45 @@ A shared Electron interface for macOS, Windows and Linux, backed by the existing
 
 ## Run from source
 
-Use macOS 13 or newer, Windows 10/11, or Ubuntu 22.04+/Debian 12+ with the official [Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux). Linux supports x64 and arm64. Install Node.js 22.12 or newer, npm and Python 3.10 or newer. For source launches on macOS, your Python installation must also support your macOS version. From the repository root:
+Use macOS 13 or newer, Windows 10/11, or Ubuntu 22.04+/Debian 12+ with the official [Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux). Linux supports x64 and arm64. Run the app in native Windows, outside WSL. Packaged apps already include Electron and Python; the following setup is for a downloaded or cloned source tree.
+
+### Automatic setup
+
+From the repository root, run `bash ./setup.sh` on macOS or Linux, or `.\setup.bat` in PowerShell on native Windows x64. On macOS you can also double-click `setup.command`; on Windows, double-click `setup.bat`.
+
+The scripts check installed tools, install missing prerequisites, run `npm ci` and open the Electron app. Installation requires an internet connection. Opening the app does not synchronize Claude data. Compatible existing Node.js, npm and Python installations are reused.
+
+On Linux where AppArmor restricts launching Electron from source, default setup builds and installs the `.deb` package, then opens the installed app as your normal user. Installation may request your administrator password. After installation, open the app directly from your application menu on later launches. This covers the restrictions used by Ubuntu 24.04 and newer. `--no-launch` prepares source dependencies without building or installing the app package; `--check` reports the required launch route without changing anything.
+
+```sh
+# macOS / Linux: read-only prerequisite check
+bash ./setup.sh --check
+# Prepare without opening the app
+bash ./setup.sh --no-launch
+```
+
+```powershell
+# Windows
+.\setup.bat --check
+.\setup.bat --no-launch
+```
+
+The console messages are in English; the app follows its operating system language preference. For source launches, run the setup script again to open the app later. See the [automatic setup guide](../README.md#automatic-setup) for platform installation details.
+
+### Manual setup for developers
+
+If automatic setup used a project-local runtime, launch the app later through the setup script. Manual `npm` commands require Node.js and npm on your normal PATH.
+
+Install Node.js 22.12 or newer, npm and Python 3.10 or newer. For source launches on macOS, your Python installation must also support your macOS version. From the repository root:
 
 ```sh
 npm ci
 npm start
 ```
 
-In Windows PowerShell, use `npm.cmd` in place of `npm` in the commands in this guide. On macOS and Linux, the app locates `python3`. On Windows, install the Python launcher and confirm `py -3 --version` in a new PowerShell window. Run the app in native Windows, outside WSL.
+In Windows PowerShell, use `npm.cmd` in place of `npm` in the commands in this guide. On macOS and Linux, the app locates `python3`. On Windows, install the Python launcher and confirm `py -3 --version` in a new PowerShell window.
 
-The setup downloads Electron and build dependencies. The app loads its interface, translations and synchronization engine locally; synchronization does not make model calls or upload your chats.
+Setup downloads Electron and build dependencies. The app loads its interface, translations and synchronization engine locally; synchronization does not make model calls or upload your chats.
 
 ## Sync your chats
 

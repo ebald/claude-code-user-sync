@@ -38,15 +38,58 @@ En Windows, usa PowerShell de Windows, fuera de WSL. Compila en el sistema de de
 
 ## Obtener el código fuente
 
-Instala [Git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/en/download) y [Python](https://www.python.org/downloads/) si es necesario. En un terminal de macOS o Linux, o en PowerShell de Windows:
+Descarga el proyecto mediante **Code → Download ZIP** en GitHub y extrae el archivo. Si ya tienes [Git](https://git-scm.com/downloads), puedes clonarlo:
 
 ```sh
 git clone https://github.com/ebald/claude-code-user-sync.git
 cd claude-code-user-sync
+```
+
+Ejecuta los comandos siguientes desde la carpeta descargada o clonada. Instala Claude Desktop por separado e inicializa tus conversaciones locales en Code antes de sincronizar.
+
+## Preparación automática
+
+Las aplicaciones empaquetadas ya incluyen Electron y Python. Los scripts de preparación sirven para ejecutar este proyecto desde su código fuente: comprueban las herramientas existentes, instalan los requisitos que faltan, descargan las dependencias y abren la aplicación. Abrirla **no** inicia una sincronización; tú eliges cuándo sincronizar en la interfaz.
+
+| Sistema | Iniciar la preparación automática |
+| --- | --- |
+| macOS | Haz doble clic en `setup.command` en Finder, o ejecuta `bash ./setup.sh` en Terminal |
+| Windows x64 | Haz doble clic en `setup.bat` en el Explorador de archivos, o ejecuta `.\setup.bat` en PowerShell |
+| Ubuntu / Debian | Ejecuta `bash ./setup.sh` en el terminal de tu usuario habitual |
+
+La instalación necesita conexión a Internet. Se reutilizan las versiones compatibles de Node.js, npm y Python que ya estén instaladas. La consola de preparación usa inglés; la aplicación abre en el idioma compatible de tu sistema y ofrece inglés, español y portugués.
+
+Si Node.js falta o es demasiado antiguo, el script de macOS/Linux descarga una distribución oficial verificada en `.sandbox/setup/`, una carpeta excluida de Git, y la usa para esta aplicación. En macOS, Python se instala mediante un paquete oficial firmado cuando hace falta. En Ubuntu/Debian, `apt` instala Python, soporte para entornos virtuales y bibliotecas de Electron que falten. La instalación de paquetes del sistema solicita permisos de administrador cuando los necesita; la aplicación se ejecuta como tu usuario habitual.
+
+En Linux, cuando AppArmor restringe el inicio de Electron desde el código fuente, la preparación predeterminada compila e instala el paquete `.deb` y abre la aplicación instalada. La instalación puede pedir tu contraseña de administrador. Después de instalarla, puedes abrir la aplicación directamente desde el menú de aplicaciones en las siguientes ocasiones. Esto resuelve las restricciones usadas por Ubuntu 24.04 y versiones posteriores; `--check` indica cuándo hace falta esta forma de inicio sin hacer cambios.
+
+En Windows, la preparación usa PowerShell y [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/) cuando está disponible. En caso contrario, verifica las descargas oficiales de Node.js y Python y los instala para este proyecto en `.sandbox/setup/`; el instalador de Python usa una instalación para tu usuario. Windows puede mostrar la solicitud de permisos habitual del instalador. La preparación no cambia la directiva global de ejecución de PowerShell. Las rutas seleccionadas solo se aplican al proceso de preparación y a la aplicación.
+
+Para comprobar los requisitos sin instalar, descargar dependencias ni abrir la aplicación:
+
+```sh
+# macOS / Linux
+bash ./setup.sh --check
+```
+
+```powershell
+# Windows
+.\setup.bat --check
+```
+
+Para instalar los requisitos que falten y preparar las dependencias del código fuente sin abrir la aplicación, sustituye `--check` por `--no-launch`. En Linux, esto también omite la compilación e instalación del paquete de la aplicación. Para iniciar desde el código fuente, vuelve a ejecutar el script cuando quieras abrir la aplicación. La preparación manual y el desarrollo siguen disponibles a continuación.
+
+### Preparación manual para desarrolladores
+
+Si la preparación automática usó un entorno local del proyecto, vuelve a abrir la aplicación con el script de preparación. Los comandos manuales de `npm` siguientes necesitan Node.js y npm en tu PATH habitual.
+
+Instala [Node.js](https://nodejs.org/en/download) 22.12 o posterior y [Python](https://www.python.org/downloads/) 3.10 o posterior, después instala las dependencias del proyecto fijadas por el archivo de bloqueo:
+
+```sh
 npm ci
 ```
 
-En PowerShell de Windows, usa `npm.cmd ci` para la instalación anterior. También puedes usar **Code → Download ZIP** en GitHub, extraer el archivo y abrir un terminal en la carpeta extraída. Ejecuta los comandos desde esa carpeta. La instalación descarga las dependencias de compilación y Electron; la sincronización se ejecuta localmente.
+En PowerShell de Windows, usa `npm.cmd ci`. La preparación descarga las dependencias de compilación y Electron; la sincronización se ejecuta localmente. Continúa con las instrucciones de tu sistema a continuación.
 
 ## macOS
 

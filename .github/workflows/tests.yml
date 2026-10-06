@@ -60,13 +60,25 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
-      - name: Install locked dependencies
-        run: npm ci
       - name: Install Linux desktop test dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2 libgbm1 libxss1
+          sudo apt-get install -y xvfb ca-certificates curl tar python3 python3-venv libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libx11-xcb1 libdrm2 libxcb-dri3-0 libatk-bridge2.0-0
+      - name: Check source setup prerequisites on macOS and Linux
+        if: runner.os != 'Windows'
+        run: bash ./setup.sh --check
+      - name: Check source setup prerequisites on Windows
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: call setup.bat --check
+      - name: Prepare app with automatic setup on macOS and Linux
+        if: runner.os != 'Windows'
+        run: bash ./setup.sh --no-launch
+      - name: Prepare app with automatic setup on Windows
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: call setup.bat --no-launch
       - name: Run Electron workflow and translation tests
         run: npm test
       - name: Check source app in read-only preview mode

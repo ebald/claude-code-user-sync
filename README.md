@@ -39,15 +39,58 @@ Run Windows commands in regular Windows PowerShell, outside WSL. WSL, SSH and cl
 
 ## Get the source
 
-Install [Git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/en/download) and [Python](https://www.python.org/downloads/) if needed. Open a terminal on macOS or Linux, or PowerShell on Windows:
+Download the project with **Code → Download ZIP** on GitHub and extract it. If you already have [Git](https://git-scm.com/downloads), you can clone it instead:
 
 ```sh
 git clone https://github.com/ebald/claude-code-user-sync.git
 cd claude-code-user-sync
+```
+
+Run the commands below from the downloaded or cloned project folder. Install Claude Desktop separately and initialize your local Code conversations before syncing.
+
+## Automatic setup
+
+Packaged apps already include Electron and Python. The setup scripts are for running this project from its source code: they check existing tools, install missing prerequisites, download the project dependencies and open the app. Opening the app does **not** start a synchronization; you choose when to sync in the interface.
+
+| System | Start automatic setup |
+| --- | --- |
+| macOS | Double-click `setup.command` in Finder, or run `bash ./setup.sh` in Terminal |
+| Windows x64 | Double-click `setup.bat` in File Explorer, or run `.\setup.bat` in PowerShell |
+| Ubuntu / Debian | Run `bash ./setup.sh` in your normal user's terminal |
+
+An internet connection is required for installation. Compatible installed versions of Node.js, npm and Python are reused. The setup console uses English; the app opens in your system's supported language and offers English, Spanish and Portuguese.
+
+When Node.js is missing or too old, the macOS/Linux script downloads a verified official Node.js distribution into the ignored `.sandbox/setup/` folder and uses it for this app. Missing Python on macOS is installed from an official signed Python package. On Ubuntu/Debian, `apt` installs missing Python, virtual-environment support and Electron runtime libraries. System package installation requests administrator privileges when needed; the app runs as your normal user.
+
+On Linux where AppArmor restricts Electron launches from source, default setup builds and installs the `.deb` package and opens the installed app instead. Installation may request your administrator password. After installation, open the app directly from your application menu on later launches. This handles the restrictions used by Ubuntu 24.04 and newer; `--check` reports when this packaged route is needed without changing anything.
+
+Windows setup uses PowerShell and [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/) when available. Otherwise, it verifies official Node.js and Python downloads and installs them for this project under `.sandbox/setup/`; the Python installer uses a per-user installation. Windows may show its normal installer permission prompt. Setup does not change the global PowerShell execution policy. Selected runtime paths apply to the setup and app process.
+
+To check prerequisites without installing, downloading dependencies or opening the app:
+
+```sh
+# macOS / Linux
+bash ./setup.sh --check
+```
+
+```powershell
+# Windows
+.\setup.bat --check
+```
+
+To install missing prerequisites and prepare source dependencies without opening the app, replace `--check` with `--no-launch`. On Linux, this also skips building and installing the app package. For source launches, run the setup script again whenever you want to open the app. Manual setup and development remain available below.
+
+### Manual setup for developers
+
+If automatic setup used a project-local runtime, open the app later with the setup launcher. The manual `npm` commands below require Node.js and npm on your normal PATH.
+
+Install [Node.js](https://nodejs.org/en/download) 22.12 or newer and [Python](https://www.python.org/downloads/) 3.10 or newer, then install the locked project dependencies:
+
+```sh
 npm ci
 ```
 
-In Windows PowerShell, use `npm.cmd ci` for the installation command above. You can also use **Code → Download ZIP** on GitHub, extract it and open a terminal in the extracted folder. All commands below run from that folder. The build dependencies and Electron runtime are downloaded during setup; synchronization itself runs locally.
+In Windows PowerShell, use `npm.cmd ci`. The build dependencies and Electron runtime are downloaded during setup; synchronization itself runs locally. Continue with your platform's instructions below.
 
 ## macOS instructions
 
