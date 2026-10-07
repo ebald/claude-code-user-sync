@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import errno
 import io
 import json
@@ -11,6 +12,7 @@ import plistlib
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -180,6 +182,26 @@ class BackendTests(unittest.TestCase):
             backend.discover_windows_application(environ={"LOCALAPPDATA": str(self.base)},
                                                 run=mock.Mock(return_value=completed))
         self.assertEqual(caught.exception.code, "CLAUDE_NOT_FOUND")
+
+    def test_windows_discovery_ignores_classic_shortcut_alongside_msix(self):
+        completed = subprocess.CompletedProcess([], 0,
+            '["com.squirrel.AnthropicClaude.Claude","Claude_pzs8sxrjxfjjc!Claude"]', "")
+        self.assertEqual(backend.discover_windows_application(
+            environ={"LOCALAPPDATA": str(self.base)}, run=mock.Mock(return_value=completed)),
+            ("msix", "Claude_pzs8sxrjxfjjc!Claude"))
+
+    def test_windows_discovery_excludes_invalid_package_application_ids(self):
+        invalid_ids = ["!Claude", "Claude_abc!", "Claude_abc!App!Other",
+                       "shell:Claude_abc!App", "Claude_abc!App/path",
+                       "Claude_abc!App\\path", "Claude_abc!App\x00",
+                       "Claude_abc!App\r", "Claude_abc!App\n", None, 42]
+        for app_id in invalid_ids:
+            with self.subTest(app_id=app_id):
+                completed = subprocess.CompletedProcess([], 0, json.dumps([app_id]), "")
+                with self.assertRaises(backend.BackendError) as caught:
+                    backend.discover_windows_application(environ={"LOCALAPPDATA": str(self.base)},
+                                                        run=mock.Mock(return_value=completed))
+                self.assertEqual(caught.exception.code, "CLAUDE_NOT_FOUND")
 
     def test_linux_defaults_use_native_platform_locations(self):
         with mock.patch.object(backend.sync_platform, "default_app_data", return_value=self.app_data) as data, \
@@ -360,6 +382,188 @@ class BackendTests(unittest.TestCase):
                 mock.patch.object(backend, "request_windows_shutdown") as request:
             self.assertEqual(self.driver.close(), {"closed": True})
         request.assert_called_once_with({42, 43})
+
+    def windows_shutdown_apis(self, *, windows=None, processes=None):
+        windows = [(101, 42)] if windows is None else windows
+        processes = {42: {"image": r"C:\Program Files\Claude\Claude.exe", "session": 1,
+                          "created": 123456, "exit": 259}} if processes is None else processes
+        window_pids = dict(windows)
+
+        def enum_windows(callback, _):
+            for window, _pid in windows:
+                callback(window, 0)
+            return True
+
+        def window_pid(window, pointer):
+            pointer._obj.value = window_pids.get(window, 0)
+            return 1 if pointer._obj.value else 0
+
+        def process_session(pid, pointer):
+            if pid == 9000:
+                pointer._obj.value = 1
+                return True
+            if pid not in processes:
+                return False
+            pointer._obj.value = processes[pid]["session"]
+            return True
+
+        def process_image(handle, _flags, buffer, length):
+            buffer.value = processes[handle - 1000]["image"]
+            length._obj.value = len(buffer.value)
+            return True
+
+        def process_times(handle, created, _exited, _kernel, _user):
+            created._obj.dwLowDateTime = processes[handle - 1000]["created"]
+            created._obj.dwHighDateTime = 7
+            return True
+
+        def exit_code(handle, pointer):
+            pointer._obj.value = processes[handle - 1000]["exit"]
+            return True
+
+        def start_session(pointer, _flags, _key):
+            pointer._obj.value = 123
+            return 0
+
+        return SimpleNamespace(
+            callback_factory=ctypes.CFUNCTYPE,
+            user32=SimpleNamespace(EnumWindows=mock.Mock(side_effect=enum_windows),
+                GetWindowThreadProcessId=mock.Mock(side_effect=window_pid), PostMessageW=mock.Mock(return_value=True)),
+            kernel32=SimpleNamespace(GetCurrentProcessId=mock.Mock(return_value=9000),
+                ProcessIdToSessionId=mock.Mock(side_effect=process_session),
+                OpenProcess=mock.Mock(side_effect=lambda _access, _inherit, pid: pid + 1000 if pid in processes else 0),
+                QueryFullProcessImageNameW=mock.Mock(side_effect=process_image),
+                GetProcessTimes=mock.Mock(side_effect=process_times), GetExitCodeProcess=mock.Mock(side_effect=exit_code),
+                CloseHandle=mock.Mock(return_value=True), TerminateProcess=mock.Mock()),
+            restart_manager=SimpleNamespace(RmStartSession=mock.Mock(side_effect=start_session),
+                RmRegisterResources=mock.Mock(return_value=0), RmShutdown=mock.Mock(return_value=0),
+                RmEndSession=mock.Mock(return_value=0)))
+
+    def test_windows_restart_manager_registers_only_gui_claude_with_creation_time(self):
+        native = self.windows_shutdown_apis(windows=[(101, 42), (102, 42), (103, 99)])
+        backend.request_windows_shutdown({42, 43}, native=native)
+        native.kernel32.OpenProcess.assert_called_once_with(0x1000, False, 42)
+        registered = native.restart_manager.RmRegisterResources.call_args.args
+        self.assertEqual(registered[:4], (123, 0, None, 1))
+        self.assertEqual(registered[5:], (0, None))
+        self.assertEqual(registered[4][0].dwProcessId, 42)
+        self.assertEqual(registered[4][0].ProcessStartTime.dwLowDateTime, 123456)
+        self.assertEqual(registered[4][0].ProcessStartTime.dwHighDateTime, 7)
+        native.restart_manager.RmShutdown.assert_called_once_with(123, 0, None)
+        native.restart_manager.RmEndSession.assert_called_once_with(123)
+        native.kernel32.CloseHandle.assert_called_once_with(1042)
+        native.user32.PostMessageW.assert_not_called()
+        native.kernel32.TerminateProcess.assert_not_called()
+
+    def test_windows_empty_or_non_gui_processes_do_not_start_shutdown(self):
+        for process_ids, windows in ((set(), [(101, 42)]), ({42}, [])):
+            with self.subTest(process_ids=process_ids):
+                native = self.windows_shutdown_apis(windows=windows)
+                backend.request_windows_shutdown(process_ids, native=native)
+                native.kernel32.OpenProcess.assert_not_called()
+                native.restart_manager.RmStartSession.assert_not_called()
+                native.user32.PostMessageW.assert_not_called()
+
+    def test_windows_exited_processes_are_not_registered_or_closed(self):
+        for processes in ({}, {42: {"image": r"C:\Claude\Claude.exe", "session": 1,
+                                    "created": 1, "exit": 0}}):
+            with self.subTest(processes=processes):
+                native = self.windows_shutdown_apis(processes=processes)
+                backend.request_windows_shutdown({42}, native=native)
+                native.restart_manager.RmStartSession.assert_not_called()
+                native.user32.PostMessageW.assert_not_called()
+                self.assertEqual(native.kernel32.CloseHandle.call_count, len(processes))
+
+    def test_windows_wrong_image_or_session_is_never_signaled(self):
+        for image, session in ((r"C:\Other\Other.exe", 1), (r"C:\Claude\Claude.exe", 2)):
+            with self.subTest(image=image, session=session):
+                native = self.windows_shutdown_apis(processes={42: {
+                    "image": image, "session": session, "created": 1, "exit": 259}})
+                backend.request_windows_shutdown({42}, native=native)
+                native.restart_manager.RmStartSession.assert_not_called()
+                native.user32.PostMessageW.assert_not_called()
+                native.kernel32.CloseHandle.assert_called_once_with(1042)
+
+    def test_windows_reused_pid_without_original_gui_is_not_registered(self):
+        native = self.windows_shutdown_apis()
+        original_open = native.kernel32.OpenProcess.side_effect
+
+        def open_replacement(*args):
+            handle = original_open(*args)
+            native.user32.GetWindowThreadProcessId.side_effect = lambda _window, pointer: (
+                setattr(pointer._obj, "value", 99) or 1)
+            return handle
+
+        native.kernel32.OpenProcess.side_effect = open_replacement
+        backend.request_windows_shutdown({42}, native=native)
+        native.restart_manager.RmStartSession.assert_not_called()
+        native.user32.PostMessageW.assert_not_called()
+        native.kernel32.CloseHandle.assert_called_once_with(1042)
+
+    def test_windows_unavailable_restart_manager_uses_only_normal_window_close(self):
+        native = self.windows_shutdown_apis()
+        native.restart_manager = None
+        backend.request_windows_shutdown({42, 43}, native=native)
+        native.user32.PostMessageW.assert_called_once_with(101, 0x0010, 0, 0)
+        native.kernel32.CloseHandle.assert_called_once_with(1042)
+        native.kernel32.TerminateProcess.assert_not_called()
+
+    def test_windows_restart_manager_failures_fall_back_without_force(self):
+        for action, failure in (("RmStartSession", 5), ("RmRegisterResources", 5),
+                                ("RmShutdown", 351), ("RmShutdown", OSError("synthetic failure"))):
+            with self.subTest(action=action, failure=failure):
+                native = self.windows_shutdown_apis()
+                function = getattr(native.restart_manager, action)
+                function.side_effect = failure if isinstance(failure, Exception) else None
+                function.return_value = failure if isinstance(failure, int) else 0
+                backend.request_windows_shutdown({42}, native=native)
+                native.user32.PostMessageW.assert_called_once_with(101, 0x0010, 0, 0)
+                native.kernel32.TerminateProcess.assert_not_called()
+                native.kernel32.CloseHandle.assert_called_once_with(1042)
+                if action == "RmStartSession":
+                    native.restart_manager.RmEndSession.assert_not_called()
+                else:
+                    native.restart_manager.RmEndSession.assert_called_once_with(123)
+                for call in native.restart_manager.RmShutdown.call_args_list:
+                    self.assertEqual(call.args, (123, 0, None))
+
+    def test_windows_session_cleanup_failure_still_closes_process_handles(self):
+        native = self.windows_shutdown_apis()
+        native.restart_manager.RmEndSession.side_effect = OSError("synthetic failure")
+        backend.request_windows_shutdown({42}, native=native)
+        native.kernel32.CloseHandle.assert_called_once_with(1042)
+        native.user32.PostMessageW.assert_not_called()
+
+    def test_windows_window_close_failure_is_safe_and_cleans_resources(self):
+        native = self.windows_shutdown_apis()
+        native.restart_manager.RmShutdown.return_value = 351
+        native.user32.PostMessageW.return_value = False
+        with self.assertRaises(backend.BackendError) as caught:
+            backend.request_windows_shutdown({42}, native=native)
+        self.assertEqual(caught.exception.code, "CLOSE_FAILED")
+        native.restart_manager.RmEndSession.assert_called_once_with(123)
+        native.kernel32.CloseHandle.assert_called_once_with(1042)
+        native.kernel32.TerminateProcess.assert_not_called()
+
+    def test_windows_fallback_does_not_signal_reused_window_or_exited_process(self):
+        for change in ("window", "process"):
+            with self.subTest(change=change):
+                native = self.windows_shutdown_apis()
+
+                def refuse_shutdown(*_):
+                    if change == "window":
+                        native.user32.GetWindowThreadProcessId.side_effect = lambda _window, pointer: (
+                            setattr(pointer._obj, "value", 99) or 1)
+                    else:
+                        native.kernel32.GetExitCodeProcess.side_effect = lambda _handle, pointer: (
+                            setattr(pointer._obj, "value", 0) or True)
+                    return 351
+
+                native.restart_manager.RmShutdown.side_effect = refuse_shutdown
+                backend.request_windows_shutdown({42}, native=native)
+                native.user32.PostMessageW.assert_not_called()
+                native.restart_manager.RmEndSession.assert_called_once_with(123)
+                native.kernel32.CloseHandle.assert_called_once_with(1042)
 
     def test_windows_final_poll_timeout_requests_manual_quit_without_other_actions(self):
         self.driver.platform = "win32"

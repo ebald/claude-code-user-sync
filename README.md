@@ -32,8 +32,8 @@ This is a local utility. It does not transfer chats between cloud accounts or co
 | Platform | Desktop app | Validation status |
 | --- | --- | --- |
 | macOS | Electron app, built for the Mac's current architecture | ARM64 packaged installation, three languages, OS language selection and real synchronization with backup and Claude reopening verified locally |
-| Windows 10/11 x64 | The same Electron interface; Windows x64 installer | Experimental; authenticated Claude Desktop synchronization has not yet been verified on a Windows machine |
-| Windows 11 ARM64 | x64 Node.js, Python and Electron through Windows emulation; packaged installer remains x64 | Source preparation, normal app launch and Electron preview verified in a VM; authenticated synchronization and the packaged installer remain unverified |
+| Windows 10/11 x64 | The same Electron interface; Windows x64 installer | Authenticated synchronization on a native x64 Windows host and the packaged installer remain unverified |
+| Windows 11 ARM64 | x64 Node.js, Python and Electron through Windows emulation; packaged installer remains x64 | Source setup, two-account synchronization, verified backup and automatic Claude exit/reopening verified in a VM; packaged installer and ARM64-host packaging remain unverified |
 | Linux | The same Electron interface; Debian installer and portable archive for the build computer’s architecture | Experimental; authenticated Claude Desktop synchronization has not yet been verified on a Linux machine |
 
 Windows 11 ARM64 uses the system’s built-in [x64 emulation](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation). Windows 10 ARM64 is unsupported. A native Windows ARM64 app build is not provided.
@@ -167,7 +167,7 @@ Alternatively, open `sync.command` from Finder. After synchronization, reopen Cl
 
 ## Windows instructions
 
-Use Windows 10/11 x64 or Windows 11 ARM64. The ARM64 source route runs x64 tools through Windows emulation and remains experimental.
+Use Windows 10/11 x64 or Windows 11 ARM64. The ARM64 source route runs x64 tools through Windows emulation; see the verification scope below.
 
 1. Install **x64 Node.js** 22.12 or newer and **x64 Python** 3.10 or newer from their official sites, including the Python launcher. Open a new PowerShell window after installation.
 2. Download or clone this project, open PowerShell in its folder and run `npm.cmd ci` if you have not already done so.
@@ -181,7 +181,7 @@ Use Windows 10/11 x64 or Windows 11 ARM64. The ARM64 source route runs x64 tools
 
 The app automatically follows your operating system’s language. You can change it in the language selector. Finish active Claude tasks and click **Sync and reopen Claude**. The app requests a normal shutdown, checks that Claude has stopped, synchronizes and tries to reopen Claude. It does not force-kill Claude. Switch accounts manually after Claude reopens. The app can use a selected Claude executable if the installed app is not discovered automatically.
 
-Claude can remain running in the system tray after its window closes. If automatic shutdown does not finish, complete active work, choose **Quit** or **Exit** from Claude's app menu or system tray menu, then retry synchronization.
+Claude can remain running in the system tray after its window closes. The app requests Claude's normal exit so its tray process can stop too. If automatic shutdown does not finish, complete active work, choose **Quit** or **Exit** from Claude's app menu or system tray menu, then retry synchronization.
 
 To try the interface without changing Claude data:
 
@@ -393,7 +393,7 @@ npm test
 python3 -m unittest discover
 ```
 
-On Windows, use `py -3 -m unittest discover` for the Python suite. All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37614320977) in the public repository passed for commit `56d6950`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed.
+On Windows, use `py -3 -m unittest discover` for the Python suite. All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) in the public repository passed for commit `ca1a76e`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed.
 
 The desktop app uses **i18next** with English, Spanish and Brazilian Portuguese JSON dictionaries in `desktop/locales/`. One interface and the same translation keys serve macOS, Windows and Linux. Tests check language coverage and interpolation placeholders. The default **System language** setting uses the operating system’s preferred supported language. English and Spanish regional variants use their matching translations; all Portuguese variants use Brazilian Portuguese. If none of the preferred languages is supported, the app uses English. A manual language choice persists between launches; select **System language** to return to automatic selection.
 
@@ -405,9 +405,11 @@ The default `setup.sh` launch passed using existing runtimes in a ZIP downloaded
 
 In a Windows 11 ARM64 virtual machine, `setup.bat --check` correctly reported missing prerequisites, `--no-launch` installed verified official x64 Node.js and Python plus npm dependencies as a normal user, and a final `--check` passed. The JavaScript and Python automated checks completed without failures. An Electron preview smoke check passed and exited normally after checking all three languages, automatic English selection from the OS, the actual local account count, the localized success status and renderer isolation.
 
-A default `.\setup.bat` run also reused the runtimes, installed locked dependencies and opened the real app. It detected initialized local profiles, started in the OS language (English), and switched to Portuguese and back to **System language** (English). Closing its window normally returned exit status 0. These checks do not verify authenticated Windows synchronization, the packaged installer or packaging on an ARM64 host.
+A default `.\setup.bat` run also reused the runtimes, installed locked dependencies and opened the real app. It detected initialized local profiles, started in the OS language (English), and switched to Portuguese and back to **System language** (English). Closing its window normally returned exit status 0. Those installation and language checks did not initiate synchronization.
 
-A separate Windows 11 ARM64 check used a ZIP downloaded directly from the public repository without credentials, extracted to a folder with spaces. `setup.bat --check` reported missing Node.js/npm and an available Python 3.14.8 x64; the default `setup.bat` run downloaded and verified Node.js 22.23.3 x64, installed the locked npm dependencies and opened the real app in the OS language (English). The final `--check` passed, and the source preview smoke check passed for all three languages, automatic OS language selection, the localized success status and renderer isolation. No synchronization was started; the default setup's normal exit status remains unconfirmed while the app is open.
+A separate Windows 11 ARM64 check used a ZIP downloaded directly from the public repository without credentials, extracted to a folder with spaces. `setup.bat --check` reported missing Node.js/npm and an available Python 3.14.8 x64; the default `setup.bat` run downloaded and verified Node.js 22.23.3 x64, installed the locked npm dependencies and opened the real app in the OS language (English). The final `--check` passed, and the source preview smoke check passed for all three languages, automatic OS language selection, the localized success status and renderer isolation. No synchronization was started during that installation check; the default setup's exit status was not recorded.
+
+In the same Windows 11 ARM64 VM, the source app synchronized one harmless local Code conversation between two initialized signed-in accounts with official Claude Desktop MSIX 2.26454.0.0. It quit Claude normally and reopened it automatically. Both profile catalogs contained the conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, and a subsequent plan had no pending changes. Repeating synchronization wrote no catalog files and created no duplicates. The Windows packaged installer and packaging on an ARM64 host remain unverified.
 
 For an additional read check with the pinned Anthropic Agent SDK:
 

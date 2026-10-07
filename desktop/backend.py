@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import plistlib
 import signal
 import subprocess
@@ -186,34 +186,157 @@ def request_linux_shutdown(process_ids):
             os.close(handle)
 
 
-def request_windows_shutdown(process_ids):
+def request_windows_shutdown(process_ids, *, native=None):
+    """Request cooperative GUI shutdown; never terminate a process.
+
+    Restart Manager supplies the session-end request that tray applications can
+    honor without treating it as merely closing a window. Its force flag stays
+    unset. The existing window-close request remains a guarded fallback.
+    """
     if not process_ids:
         return
     import ctypes
     from ctypes import wintypes
+    from types import SimpleNamespace
+
+    class UniqueProcess(ctypes.Structure):
+        _fields_ = [("dwProcessId", wintypes.DWORD), ("ProcessStartTime", wintypes.FILETIME)]
+
+    handles = {}
+    manager = None
+    session = None
     try:
-        user32 = ctypes.WinDLL("user32", use_last_error=True)
-        callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        if native is None:
+            native = SimpleNamespace(user32=ctypes.WinDLL("user32", use_last_error=True),
+                                     kernel32=ctypes.WinDLL("kernel32", use_last_error=True),
+                                     callback_factory=ctypes.WINFUNCTYPE)
+            try:
+                native.restart_manager = ctypes.WinDLL("rstrtmgr", use_last_error=True)
+            except OSError:
+                native.restart_manager = None
+        user32, kernel32 = native.user32, native.kernel32
+        callback_type = native.callback_factory(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         user32.EnumWindows.argtypes = (callback_type, wintypes.LPARAM)
         user32.EnumWindows.restype = wintypes.BOOL
         user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
         user32.GetWindowThreadProcessId.restype = wintypes.DWORD
         user32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
         user32.PostMessageW.restype = wintypes.BOOL
-        failures = []
+        kernel32.GetCurrentProcessId.argtypes = ()
+        kernel32.GetCurrentProcessId.restype = wintypes.DWORD
+        kernel32.ProcessIdToSessionId.argtypes = (wintypes.DWORD, ctypes.POINTER(wintypes.DWORD))
+        kernel32.ProcessIdToSessionId.restype = wintypes.BOOL
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.QueryFullProcessImageNameW.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                      ctypes.POINTER(wintypes.DWORD))
+        kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+        kernel32.GetProcessTimes.argtypes = (wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4))
+        kernel32.GetProcessTimes.restype = wintypes.BOOL
+        kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        windows = []
 
         @callback_type
-        def close_window(window, _):
+        def collect_window(window, _):
             pid = wintypes.DWORD()
             user32.GetWindowThreadProcessId(window, ctypes.byref(pid))
-            if pid.value in process_ids and not user32.PostMessageW(window, 0x0010, 0, 0):
-                failures.append(ctypes.get_last_error())
+            if pid.value in process_ids:
+                windows.append((window, pid.value))
             return True
 
-        if not user32.EnumWindows(close_window, 0) or failures:
+        if not user32.EnumWindows(collect_window, 0):
             raise BackendError("CLOSE_FAILED")
-    except (OSError, AttributeError) as error:
+        if not windows:
+            return
+        current_session = wintypes.DWORD()
+        if not kernel32.ProcessIdToSessionId(kernel32.GetCurrentProcessId(), ctypes.byref(current_session)):
+            raise BackendError("CLOSE_FAILED")
+        identities = []
+        for pid in sorted({pid for _, pid in windows}):
+            # QUERY_LIMITED_INFORMATION permits inspecting identity, not killing.
+            handle = kernel32.OpenProcess(0x1000, False, pid)
+            if not handle:
+                continue
+            handles[pid] = handle
+            image, length = ctypes.create_unicode_buffer(32768), wintypes.DWORD(32768)
+            target_session, exit_code = wintypes.DWORD(), wintypes.DWORD()
+            created, exited, kernel_time, user_time = (wintypes.FILETIME() for _ in range(4))
+            if (not kernel32.QueryFullProcessImageNameW(handle, 0, image, ctypes.byref(length))
+                    or PureWindowsPath(image.value).name.casefold() != "claude.exe"
+                    or not kernel32.ProcessIdToSessionId(pid, ctypes.byref(target_session))
+                    or target_session.value != current_session.value
+                    or not kernel32.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(exited),
+                                                    ctypes.byref(kernel_time), ctypes.byref(user_time))
+                    or not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+                    or exit_code.value != 259):  # STILL_ACTIVE
+                continue
+            # The PID may have been reused between enumeration and OpenProcess.
+            # Require a window still belonging to this verified process before
+            # registering it; a replacement console process must remain untouched.
+            still_gui = False
+            for window, expected_pid in windows:
+                owner = wintypes.DWORD()
+                if (expected_pid == pid
+                        and user32.GetWindowThreadProcessId(window, ctypes.byref(owner))
+                        and owner.value == pid):
+                    still_gui = True
+                    break
+            if not still_gui:
+                continue
+            identities.append(UniqueProcess(pid, created))
+        if not identities:
+            return
+        manager = native.restart_manager
+        if manager is not None:
+            try:
+                manager.RmStartSession.argtypes = (ctypes.POINTER(wintypes.DWORD), wintypes.DWORD, wintypes.LPWSTR)
+                manager.RmStartSession.restype = wintypes.DWORD
+                manager.RmRegisterResources.argtypes = (wintypes.DWORD, wintypes.UINT,
+                    ctypes.POINTER(wintypes.LPCWSTR), wintypes.UINT, ctypes.POINTER(UniqueProcess),
+                    wintypes.UINT, ctypes.POINTER(wintypes.LPCWSTR))
+                manager.RmRegisterResources.restype = wintypes.DWORD
+                manager.RmShutdown.argtypes = (wintypes.DWORD, wintypes.ULONG, ctypes.c_void_p)
+                manager.RmShutdown.restype = wintypes.DWORD
+                manager.RmEndSession.argtypes = (wintypes.DWORD,)
+                manager.RmEndSession.restype = wintypes.DWORD
+                started, key = wintypes.DWORD(), ctypes.create_unicode_buffer(33)
+                if manager.RmStartSession(ctypes.byref(started), 0, key) == 0:
+                    session = started.value
+                    registered = (UniqueProcess * len(identities))(*identities)
+                    if (manager.RmRegisterResources(session, 0, None, len(registered), registered, 0, None) == 0
+                            and manager.RmShutdown(session, 0, None) == 0):
+                        return
+            except (OSError, AttributeError):
+                # An unavailable/refusing manager leaves normal window close as
+                # the only fallback. The caller still requires every process to exit.
+                pass
+        verified = {identity.dwProcessId for identity in identities}
+        for window, expected_pid in windows:
+            pid, exit_code = wintypes.DWORD(), wintypes.DWORD()
+            if (expected_pid not in verified
+                    or not user32.GetWindowThreadProcessId(window, ctypes.byref(pid))
+                    or pid.value != expected_pid
+                    or not kernel32.GetExitCodeProcess(handles[expected_pid], ctypes.byref(exit_code))
+                    or exit_code.value != 259):
+                continue
+            if not user32.PostMessageW(window, 0x0010, 0, 0):
+                raise BackendError("CLOSE_FAILED")
+    except (OSError, AttributeError, ctypes.ArgumentError) as error:
         raise BackendError("CLOSE_FAILED") from error
+    finally:
+        if session is not None:
+            try:
+                manager.RmEndSession(session)
+            except (OSError, AttributeError, ctypes.ArgumentError):
+                pass
+        for handle in handles.values():
+            try:
+                native.kernel32.CloseHandle(handle)
+            except (OSError, AttributeError, ctypes.ArgumentError):
+                pass
 
 
 def validate_mac_application(path):
@@ -274,10 +397,15 @@ def discover_windows_application(executable=None, *, environ=None, run=None):
                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         app_ids = json.loads(response.stdout) if response.stdout.strip() else []
         app_ids = [app_ids] if isinstance(app_ids, str) else app_ids
-        if (isinstance(app_ids, list) and len(app_ids) == 1
-                and isinstance(app_ids[0], str) and "!" in app_ids[0]
-                and not any(character in app_ids[0] for character in '\\/:\x00\r\n')):
-            return ("msix", app_ids[0])
+        if isinstance(app_ids, list):
+            # Start can retain a classic shortcut alongside the installed MSIX.
+            # Only package application IDs participate in the ambiguity check.
+            app_ids = [app_id for app_id in app_ids
+                       if isinstance(app_id, str) and app_id.count("!") == 1
+                       and all(app_id.split("!"))
+                       and not any(character in app_id for character in '\\/:\x00\r\n')]
+            if len(app_ids) == 1:
+                return ("msix", app_ids[0])
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, UnicodeError):
         pass
     local = Path(environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local")

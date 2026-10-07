@@ -31,8 +31,8 @@ La herramienta no transfiere chats entre cuentas en la nube ni entre equipos, y 
 | Sistema | Aplicación | Verificación |
 | --- | --- | --- |
 | macOS | Aplicación Electron para la arquitectura del Mac usado para compilar | Instalación empaquetada ARM64, tres idiomas, selección del idioma del sistema y sincronización real con copia de seguridad y reapertura de Claude verificadas localmente |
-| Windows 10/11 x64 | La misma interfaz Electron e instalador Windows x64 | Experimental; aún no se ha verificado la sincronización autenticada de Claude Desktop en un equipo Windows |
-| Windows 11 ARM64 | Node.js, Python y Electron x64 mediante la emulación de Windows; el instalador empaquetado sigue siendo x64 | Preparación desde el código fuente, inicio normal y vista previa Electron verificados en una VM; la sincronización autenticada y el instalador empaquetado siguen sin verificar |
+| Windows 10/11 x64 | La misma interfaz Electron e instalador Windows x64 | La sincronización autenticada en un equipo Windows x64 nativo y el instalador empaquetado siguen sin verificar |
+| Windows 11 ARM64 | Node.js, Python y Electron x64 mediante la emulación de Windows; el instalador empaquetado sigue siendo x64 | Preparación desde el código fuente, sincronización de dos cuentas, copia de seguridad verificada y cierre/reapertura automáticos de Claude verificados en una VM; el instalador empaquetado y la compilación en un equipo ARM64 siguen sin verificar |
 | Linux | La misma interfaz Electron, con instalador Debian y archivo portátil para la arquitectura del equipo de compilación | Experimental; aún no se ha verificado la sincronización autenticada de Claude Desktop en un equipo Linux |
 
 Windows 11 ARM64 usa la [emulación x64](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation) incluida en el sistema. Windows 10 ARM64 no es compatible. No se ofrece una compilación nativa de la aplicación para Windows ARM64.
@@ -162,7 +162,7 @@ O abre `sync.command` desde Finder. Después vuelve a abrir Claude e inicia sesi
 
 ## Windows
 
-Usa Windows 10/11 x64 o Windows 11 ARM64. La opción ARM64 desde el código fuente ejecuta herramientas x64 mediante la emulación de Windows y sigue siendo experimental.
+Usa Windows 10/11 x64 o Windows 11 ARM64. La opción ARM64 desde el código fuente ejecuta herramientas x64 mediante la emulación de Windows; consulta el alcance de la verificación más abajo.
 
 1. Instala **Node.js x64** 22.12 o posterior y **Python x64** 3.10 o posterior desde sus sitios oficiales, incluido el lanzador de Python. Abre una ventana nueva de PowerShell después de instalarlos.
 2. Abre PowerShell en la carpeta del proyecto y ejecuta `npm.cmd ci` si todavía no lo has hecho.
@@ -176,7 +176,7 @@ Usa Windows 10/11 x64 o Windows 11 ARM64. La opción ARM64 desde el código fuen
 
 La aplicación sigue automáticamente el idioma del sistema operativo. Puedes cambiarlo en el selector de idioma. Termina tus tareas en Claude y pulsa el botón de sincronización y reapertura. La aplicación solicita un cierre normal, comprueba que Claude se haya detenido, sincroniza e intenta volver a abrirlo. No fuerza el cierre. El cambio de cuenta sigue siendo manual. Si no detecta Claude automáticamente, puedes seleccionar su ejecutable.
 
-Claude puede seguir ejecutándose en la bandeja del sistema después de cerrar su ventana. Si el cierre automático no termina, completa las tareas activas, elige **Salir** (**Quit/Exit**) en el menú de Claude o de su icono en la bandeja y vuelve a intentar la sincronización.
+Claude puede seguir ejecutándose en la bandeja del sistema después de cerrar su ventana. La aplicación solicita una salida normal de Claude para que su proceso de la bandeja también termine. Si el cierre automático no termina, completa las tareas activas, elige **Salir** (**Quit/Exit**) en el menú de Claude o de su icono en la bandeja y vuelve a intentar la sincronización.
 
 Para probar sin modificar datos de Claude:
 
@@ -348,7 +348,7 @@ npm test
 python3 -m unittest discover
 ```
 
-En Windows, usa `npm.cmd test` y `py -3 -m unittest discover`. Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37614320977) del repositorio público pasaron para el commit `56d6950`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. La [guía de la aplicación](../desktop/README.es.md#pruebas-y-vista-previa) incluye los comandos de vista previa y empaquetado.
+En Windows, usa `npm.cmd test` y `py -3 -m unittest discover`. Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) del repositorio público pasaron para el commit `ca1a76e`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. La [guía de la aplicación](../desktop/README.es.md#pruebas-y-vista-previa) incluye los comandos de vista previa y empaquetado.
 
 La interfaz compartida usa **i18next** y diccionarios JSON en `desktop/locales/` para inglés, español y portugués brasileño. Las claves son iguales en macOS, Windows y Linux, y las pruebas comprueban su cobertura y las variables de interpolación. Por defecto, **Idioma del sistema** usa el idioma compatible preferido del sistema operativo. Las variantes regionales de inglés y español usan las traducciones correspondientes; todas las variantes de portugués usan portugués brasileño. Si ninguno de los idiomas preferidos tiene traducción, la aplicación usa inglés. Se guarda la elección manual entre aperturas; selecciona **Idioma del sistema** para volver a la selección automática.
 
@@ -360,9 +360,11 @@ El inicio predeterminado de `setup.sh` pasó usando las herramientas existentes 
 
 En una máquina virtual Windows 11 ARM64, `setup.bat --check` informó correctamente de los requisitos ausentes, `--no-launch` instaló Node.js y Python x64 desde descargas oficiales verificadas y las dependencias npm como usuario normal, y la comprobación final `--check` pasó. Las comprobaciones automatizadas de JavaScript y Python terminaron sin fallos. Una comprobación de la vista previa Electron pasó y terminó normalmente tras verificar los tres idiomas, la selección automática de inglés del sistema, la cantidad real de cuentas locales, el estado de éxito traducido y el aislamiento del renderer.
 
-La ejecución predeterminada de `.\setup.bat` también reutilizó las herramientas, instaló las dependencias fijadas y abrió la aplicación real. Detectó perfiles locales inicializados, inició en el idioma del sistema (inglés) y cambió a portugués y de nuevo a **Idioma del sistema** (inglés). Cerrar su ventana normalmente terminó con código de salida 0. Estas comprobaciones no verifican la sincronización autenticada en Windows, el instalador empaquetado ni la compilación en un equipo ARM64.
+La ejecución predeterminada de `.\setup.bat` también reutilizó las herramientas, instaló las dependencias fijadas y abrió la aplicación real. Detectó perfiles locales inicializados, inició en el idioma del sistema (inglés) y cambió a portugués y de nuevo a **Idioma del sistema** (inglés). Cerrar su ventana normalmente terminó con código de salida 0. Esas comprobaciones de instalación e idioma no iniciaron una sincronización.
 
-Una comprobación independiente en Windows 11 ARM64 usó un ZIP descargado directamente del repositorio público sin credenciales, extraído en una carpeta con espacios. `setup.bat --check` informó de Node.js/npm ausentes y Python 3.14.8 x64 disponible; la ejecución predeterminada de `setup.bat` descargó y verificó Node.js 22.23.3 x64, instaló las dependencias npm fijadas y abrió la aplicación real en el idioma del sistema (inglés). La comprobación final `--check` pasó, al igual que la prueba de vista previa desde el código fuente para los tres idiomas, la selección automática del idioma del sistema, el estado de éxito traducido y el aislamiento del renderer. No se inició una sincronización; el código de salida normal de la preparación predeterminada sigue sin confirmarse mientras la aplicación está abierta.
+Una comprobación independiente en Windows 11 ARM64 usó un ZIP descargado directamente del repositorio público sin credenciales, extraído en una carpeta con espacios. `setup.bat --check` informó de Node.js/npm ausentes y Python 3.14.8 x64 disponible; la ejecución predeterminada de `setup.bat` descargó y verificó Node.js 22.23.3 x64, instaló las dependencias npm fijadas y abrió la aplicación real en el idioma del sistema (inglés). La comprobación final `--check` pasó, al igual que la prueba de vista previa desde el código fuente para los tres idiomas, la selección automática del idioma del sistema, el estado de éxito traducido y el aislamiento del renderer. No se inició una sincronización durante esa comprobación de instalación; no se registró el código de salida de la preparación predeterminada.
+
+En la misma VM Windows 11 ARM64, la aplicación desde el código fuente sincronizó una conversación local de prueba en Code entre dos cuentas inicializadas con sesión iniciada en Claude Desktop oficial MSIX 2.26454.0.0. Cerró Claude normalmente y lo reabrió de forma automática. Después, ambos catálogos de perfiles contenían la conversación; la instantánea de la copia de seguridad y el catálogo escrito pasaron las comprobaciones de hashes, no faltaban historiales y un plan posterior no tenía cambios pendientes. Repetir la sincronización no escribió archivos del catálogo ni creó duplicados. El instalador Windows empaquetado y la compilación en un equipo ARM64 siguen sin verificar.
 
 Para una comprobación adicional de lectura con la versión fija de Anthropic Agent SDK:
 

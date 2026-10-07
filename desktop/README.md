@@ -64,13 +64,13 @@ Setup downloads Electron and build dependencies. The app loads its interface, tr
 
 The app requests a normal shutdown, waits up to 30 seconds and checks that Claude has stopped before writing catalogs. On Linux, automatic shutdown is available for the verified official Claude Desktop installation; finish active Claude Code terminals too. If shutdown cannot be requested safely or processes remain active, quit Claude completely and try again. It does not force-kill Claude. Account switching remains manual. The same interface and workflow serve all three platforms; the platform-specific backend handles Claude discovery and shutdown.
 
-On Windows, Claude can remain running in the system tray after its window closes. If automatic shutdown does not finish, complete active work, choose **Quit** or **Exit** from Claude's app menu or system tray menu, then retry synchronization.
+On Windows, Claude can remain running in the system tray after its window closes. The app requests Claude's normal exit so its tray process can stop too. If automatic shutdown does not finish, complete active work, choose **Quit** or **Exit** from Claude's app menu or system tray menu, then retry synchronization.
 
 The account count comes from local account directories, rather than the number of organization profiles. A single account can contain more than one organization profile.
 
 Successful synchronization uses a success status. Unavailable files, histories or unresolved differences are stated specifically and can be reviewed in diagnostics. The file and backup controls open the saved result in your operating system’s file manager. If automatic Claude discovery fails, select the Claude application or executable through the app.
 
-Windows and Linux synchronization remain experimental until the authenticated Claude Desktop workflow is verified on real computers running those systems.
+Authenticated synchronization from source has been verified in a Windows 11 ARM64 VM using x64 emulation. Authenticated testing on a native Windows x64 host, the Windows packaged installer and the Linux workflow remain unverified.
 
 ## Languages
 
@@ -184,11 +184,13 @@ The default `setup.sh` launch passed using existing runtimes in a ZIP downloaded
 
 In a Windows 11 ARM64 virtual machine, `setup.bat --check` correctly reported missing prerequisites, `--no-launch` installed verified official x64 Node.js and Python plus npm dependencies as a normal user, and a final `--check` passed. The JavaScript and Python automated checks completed without failures. A source preview smoke check passed and exited normally after checking English, Spanish and Portuguese, automatic English selection from the OS, the actual local account count, the localized success status and renderer isolation.
 
-A default `.\setup.bat` run also reused the runtimes, installed locked dependencies and opened the real app. It detected initialized local profiles, started in the OS language (English), and switched to Portuguese and back to **System language** (English). Closing its window normally returned exit status 0. Authenticated Windows synchronization, the packaged installer and packaging on an ARM64 host remain unverified.
+A default `.\setup.bat` run also reused the runtimes, installed locked dependencies and opened the real app. It detected initialized local profiles, started in the OS language (English), and switched to Portuguese and back to **System language** (English). Closing its window normally returned exit status 0. Those installation and language checks did not initiate synchronization.
 
-A separate Windows 11 ARM64 check used a ZIP downloaded directly from the public repository without credentials, extracted to a folder with spaces. `setup.bat --check` reported missing Node.js/npm and an available Python 3.14.8 x64; the default `setup.bat` run downloaded and verified Node.js 22.23.3 x64, installed the locked npm dependencies and opened the real app in the OS language (English). The final `--check` passed, and the source preview smoke check passed for all three languages, automatic OS language selection, the localized success status and renderer isolation. No synchronization was started; the default setup's normal exit status remains unconfirmed while the app is open.
+A separate Windows 11 ARM64 check used a ZIP downloaded directly from the public repository without credentials, extracted to a folder with spaces. `setup.bat --check` reported missing Node.js/npm and an available Python 3.14.8 x64; the default `setup.bat` run downloaded and verified Node.js 22.23.3 x64, installed the locked npm dependencies and opened the real app in the OS language (English). The final `--check` passed, and the source preview smoke check passed for all three languages, automatic OS language selection, the localized success status and renderer isolation. No synchronization was started during that installation check; the default setup's exit status was not recorded.
 
-All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37614320977) in the public repository passed for commit `56d6950`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
+In the same Windows 11 ARM64 VM, the source app synchronized one harmless local Code conversation between two initialized signed-in accounts with official Claude Desktop MSIX 2.26454.0.0. It quit Claude normally and reopened it automatically. Both profile catalogs contained the conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, and a subsequent plan had no pending changes. Repeating synchronization wrote no catalog files and created no duplicates. The Windows packaged installer and packaging on an ARM64 host remain unverified.
+
+All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) in the public repository passed for commit `ca1a76e`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
 
 ## Architecture
 
