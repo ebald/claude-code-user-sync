@@ -407,6 +407,8 @@ In a Windows 11 ARM64 virtual machine, `setup.bat --check` correctly reported mi
 
 A default `.\setup.bat` run also reused the runtimes, installed locked dependencies and opened the real app. It detected initialized local profiles, started in the OS language (English), and switched to Portuguese and back to **System language** (English). Closing its window normally returned exit status 0. These checks do not verify authenticated Windows synchronization, the packaged installer or packaging on an ARM64 host.
 
+A separate Windows 11 ARM64 check used a ZIP downloaded directly from the public repository without credentials, extracted to a folder with spaces. `setup.bat --check` reported missing Node.js/npm and an available Python 3.14.8 x64; the default `setup.bat` run downloaded and verified Node.js 22.23.3 x64, installed the locked npm dependencies and opened the real app in the OS language (English). The final `--check` passed, and the source preview smoke check passed for all three languages, automatic OS language selection, the localized success status and renderer isolation. No synchronization was started; the default setup's normal exit status remains unconfirmed while the app is open.
+
 For an additional read check with the pinned Anthropic Agent SDK:
 
 ```sh

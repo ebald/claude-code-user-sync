@@ -362,6 +362,8 @@ Em uma máquina virtual Windows 11 ARM64, `setup.bat --check` informou corretame
 
 A execução padrão de `.\setup.bat` também reutilizou as ferramentas, instalou as dependências fixadas e abriu o aplicativo real. Detectou perfis locais inicializados, abriu no idioma do sistema (inglês) e mudou para português e novamente para **Idioma do sistema** (inglês). Fechar sua janela normalmente terminou com código de saída 0. Essas verificações não comprovam a sincronização autenticada no Windows, o instalador empacotado nem a compilação em um computador ARM64.
 
+Uma verificação separada no Windows 11 ARM64 usou um ZIP baixado diretamente do repositório público sem credenciais, extraído em uma pasta com espaços. `setup.bat --check` informou Node.js/npm ausentes e Python 3.14.8 x64 disponível; a execução padrão de `setup.bat` baixou e verificou Node.js 22.23.3 x64, instalou as dependências npm fixadas e abriu o aplicativo real no idioma do sistema (inglês). A verificação final `--check` passou, assim como a verificação da prévia pelo código-fonte para os três idiomas, a seleção automática do idioma do sistema, o estado de sucesso traduzido e o isolamento do renderer. Nenhuma sincronização foi iniciada; o código de saída normal da preparação padrão continua sem confirmação enquanto o aplicativo está aberto.
+
 Para uma verificação adicional de leitura com a versão fixa do Anthropic Agent SDK:
 
 ```sh
