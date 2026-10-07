@@ -9,7 +9,7 @@ $script:PythonInstallerHash = '759be887b96e736a3ca886daf8d575f18fcae1a09efab6902
 
 function Show-SetupHelp {
     Write-Host @'
-Claude Code User Sync - automatic source setup (Windows 10/11, x64)
+Claude Code User Sync - automatic source setup (Windows 10/11 x64; Windows 11 ARM64)
 
 Usage: setup.bat [--check | --no-launch | --help]
 
@@ -23,19 +23,35 @@ Missing runtimes are installed with WinGet when available. Otherwise, verified
 official runtimes are installed under this project's ignored .sandbox/setup.
 Installer elevation is requested by Windows only when needed. No permanent
 execution-policy changes are made. Fallback runtimes do not change global PATH.
+Windows 11 ARM64 runs the x64 app and runtimes through Windows' built-in emulation.
 
 CLAUDE_SYNC_PYTHON may select a specific x64 Python executable (without arguments).
 Install Claude Desktop and sign in separately: https://claude.com/download
 '@
 }
 
-function Assert-WindowsHost {
-    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -or [Environment]::OSVersion.Version.Major -lt 10) {
-        throw 'Run setup.bat on Windows 10 or Windows 11. Use setup.sh on macOS or Linux.'
-    }
+function Get-WindowsHostInfo {
     $architecture = [Environment]::GetEnvironmentVariable('PROCESSOR_ARCHITEW6432')
     if (-not $architecture) { $architecture = [Environment]::GetEnvironmentVariable('PROCESSOR_ARCHITECTURE') }
-    if ($architecture -ne 'AMD64') { throw 'The Windows app currently requires native x64 Windows and x64 runtimes.' }
+    return [pscustomobject]@{
+        Platform = [Environment]::OSVersion.Platform
+        Version = [Environment]::OSVersion.Version
+        Architecture = $architecture
+    }
+}
+
+function Assert-WindowsHost {
+    $hostInfo = Get-WindowsHostInfo
+    if ($hostInfo.Platform -ne [PlatformID]::Win32NT -or $hostInfo.Version.Major -lt 10) {
+        throw 'Run setup.bat on Windows 10 or Windows 11. Use setup.sh on macOS or Linux.'
+    }
+    if ($hostInfo.Architecture -eq 'ARM64') {
+        # Windows 10 ARM64 only emulates x86; x64 emulation starts with Windows 11.
+        if ($hostInfo.Version -lt [Version]'10.0.22000') { throw 'Windows 11 or newer is required on ARM64 to run the x64 app and runtimes.' }
+        Write-Host 'Windows ARM64: using built-in x64 emulation for the app and runtimes.'
+    } elseif ($hostInfo.Architecture -ne 'AMD64') {
+        throw 'Use x64 Windows 10/11, or Windows 11 ARM64 with built-in x64 emulation.'
+    }
 }
 
 function Get-InstalledCommandPaths([string]$Name) {
@@ -133,13 +149,15 @@ function Find-PythonRuntime {
         if (-not (Test-RuntimePath $candidate)) { continue }
         # Single quotes inside Python avoid Windows PowerShell 5.1 native-argument
         # quoting removing embedded double quotes from the -c argument.
-        $code = "import json,platform,struct,sys,venv,ensurepip; print(json.dumps({'version':list(sys.version_info[:3]),'bits':struct.calcsize('P')*8,'machine':platform.machine(),'executable':sys.executable,'platform':sys.platform}))"
+        # platform.machine() can report the native ARM64 host for an emulated
+        # x64 Python. sysconfig identifies the interpreter's compiled platform.
+        $code = "import json,struct,sys,sysconfig,venv,ensurepip; print(json.dumps({'version':list(sys.version_info[:3]),'bits':struct.calcsize('P')*8,'architecture':sysconfig.get_platform(),'executable':sys.executable,'platform':sys.platform}))"
         $result = Invoke-NativeCapture $candidate @('-B', '-c', $code)
         if ($result.Code -ne 0) { continue }
         try {
             $info = $result.Output | ConvertFrom-Json
             $version = $info.version -join '.'
-            if ([Version]$version -ge [Version]'3.10.0' -and $info.bits -eq 64 -and $info.machine -match '^(?i:AMD64|x86_64)$' -and $info.platform -eq 'win32') {
+            if ([Version]$version -ge [Version]'3.10.0' -and $info.bits -eq 64 -and $info.architecture -eq 'win-amd64' -and $info.platform -eq 'win32') {
                 return [pscustomobject]@{ Executable = [string]$info.executable; Version = $version }
             }
         } catch { continue }
@@ -177,7 +195,13 @@ function Save-OfficialDownload([string]$Url, [string]$Destination) {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $partial = $Destination + '.partial'
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $partial
+        # Repeated console progress rendering is expensive in Windows PowerShell
+        # 5.1. Suppress it only while downloading, including failed downloads.
+        $previousProgressPreference = $ProgressPreference
+        try {
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $partial
+        } finally { $ProgressPreference = $previousProgressPreference }
         Move-Item -LiteralPath $partial -Destination $Destination -Force
     } finally { if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force } }
 }

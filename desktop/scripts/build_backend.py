@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 import sys
+import sysconfig
 import venv
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,8 +19,14 @@ def main():
     args = parser.parse_args()
     if sys.platform not in ("darwin", "win32", "linux") or sys.version_info < (3, 10):
         parser.error("Build on macOS, Windows or Linux using Python 3.10 or newer.")
-    machine = platform.machine().lower()
-    actual_arch = "arm64" if machine in ("arm64", "aarch64") else "x64" if machine in ("amd64", "x86_64") else machine
+    if sys.platform == "win32":
+        # machine() can describe the native ARM64 host while x64 Python runs
+        # under emulation. Match Node against the interpreter's compiled target.
+        target = sysconfig.get_platform()
+        actual_arch = {"win-amd64": "x64", "win-arm64": "arm64"}.get(target, target)
+    else:
+        machine = platform.machine().lower()
+        actual_arch = "arm64" if machine in ("arm64", "aarch64") else "x64" if machine in ("amd64", "x86_64") else machine
     if actual_arch != args.arch:
         parser.error("Python and Node.js must use the same architecture. Select a matching Python with CLAUDE_SYNC_PYTHON.")
     environment = ROOT / ".sandbox/electron-backend" / f"{sys.platform}-{args.arch}" / "venv"

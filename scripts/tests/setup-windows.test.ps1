@@ -11,6 +11,7 @@ function Assert-Throws([scriptblock]$Action, [string]$Pattern) {
 }
 
 $originalNodeFinder = ${function:Find-NodeRuntime}
+$originalHostInfo = ${function:Get-WindowsHostInfo}
 $originalPythonFinder = ${function:Find-PythonRuntime}
 $originalInstall = ${function:Install-Prerequisite}
 $originalPortableNode = ${function:Install-PortableNode}
@@ -24,8 +25,34 @@ $originalCapture = ${function:Invoke-NativeCapture}
 $originalPythonCandidates = ${function:Get-PythonCandidatePaths}
 $previousOverride = $env:CLAUDE_SYNC_PYTHON
 $previousPath = $env:Path
+$previousProgressPreference = $ProgressPreference
 try {
     $env:CLAUDE_SYNC_PYTHON = ''
+    # Only Windows 11 ARM64 has the x64 emulation needed by our verified runtimes.
+    function Get-WindowsHostInfo { return $script:testHost }
+    $script:testHost = [pscustomobject]@{ Platform = [PlatformID]::Win32NT; Version = [Version]'10.0.19045'; Architecture = 'AMD64' }
+    Assert-WindowsHost
+    $script:testHost.Version = [Version]'10.0.26100'
+    Assert-WindowsHost
+    $script:testHost.Architecture = 'ARM64'
+    $script:testHost.Version = [Version]'10.0.22000'
+    $emulationMessages = @(Assert-WindowsHost 6>&1)
+    Assert-Equal ($emulationMessages -join '') 'Windows ARM64: using built-in x64 emulation for the app and runtimes.' 'Windows 11 ARM64 reports the emulated x64 runtime choice'
+    $script:testHost.Version = [Version]'10.0.21999'
+    Assert-Throws { Assert-WindowsHost } 'Windows 11 or newer is required on ARM64'
+    $script:testHost.Version = [Version]'10.0.26100'
+    $script:testHost.Architecture = 'x86'
+    Assert-Throws { Assert-WindowsHost } 'Use x64 Windows'
+    $script:testHost.Architecture = ''
+    Assert-Throws { Assert-WindowsHost } 'Use x64 Windows'
+    $script:testHost.Architecture = 'AMD64'
+    $script:testHost.Version = [Version]'6.3.9600'
+    Assert-Throws { Assert-WindowsHost } 'Run setup.bat on Windows 10 or Windows 11'
+    $script:testHost.Platform = [PlatformID]::Unix
+    $script:testHost.Version = [Version]'10.0.26100'
+    Assert-Throws { Assert-WindowsHost } 'Run setup.bat on Windows 10 or Windows 11'
+    ${function:Get-WindowsHostInfo} = $originalHostInfo
+
     # Main-flow tests use functions in memory; no external process or install runs.
     function Assert-WindowsHost { $script:hostChecks++ }
     function Find-NodeRuntime { return $script:testNode }
@@ -90,7 +117,7 @@ try {
         if ($Name -eq 'node.exe') { @('C:\Users\Example\WindowsApps\node.exe', 'C:\Old\node.exe', 'C:\ARM\node.exe', 'C:\Node Runtime\node.exe') }
         if ($Name -eq 'custom-python.exe') { 'C:\Python Runtime\python.exe' }
     }
-    function Get-PythonCandidatePaths { @('C:\Users\Example\WindowsApps\python.exe', 'C:\Old\python.exe', 'C:\ARM\python.exe', 'C:\Python Runtime\python.exe') }
+    function Get-PythonCandidatePaths { @('C:\Users\Example\WindowsApps\python.exe', 'C:\Old\python.exe', 'C:\ARM\python.exe', 'C:\32Bit\python.exe', 'C:\Python Runtime\python.exe') }
     function Invoke-NativeCapture([string]$Executable, [string[]]$Arguments) {
         $script:captured += $Executable
         if ($Executable -match 'node\.exe$') {
@@ -100,15 +127,17 @@ try {
         }
         Assert-Equal $Arguments[0] '-B' 'Python discovery disables bytecode writes during read-only checks'
         $version = if ($Executable -match '\\Old\\') { @(3, 9, 9) } else { @(3, 14, 8) }
-        $machine = if ($Executable -match '\\ARM\\') { 'ARM64' } else { 'AMD64' }
-        return [pscustomobject]@{ Code = 0; Output = (@{ version = $version; bits = 64; machine = $machine; platform = 'win32'; executable = $Executable } | ConvertTo-Json -Compress) }
+        $architecture = if ($Executable -match '\\ARM\\') { 'win-arm64' } elseif ($Executable -match '\\32Bit\\') { 'win32' } else { 'win-amd64' }
+        $bits = if ($Executable -match '\\32Bit\\') { 32 } else { 64 }
+        # Even an x64 interpreter can report the native ARM64 host via machine().
+        return [pscustomobject]@{ Code = 0; Output = (@{ version = $version; bits = $bits; architecture = $architecture; machine = 'ARM64'; platform = 'win32'; executable = $Executable } | ConvertTo-Json -Compress) }
     }
     $env:CLAUDE_SYNC_PYTHON = ''
     $script:privateNodeReady = $false
     Assert-Equal (Find-NodeRuntime).Executable 'C:\Node Runtime\node.exe' 'Discovery skips old/wrong-architecture Node'
     $script:privateNodeReady = $true
     Assert-Equal (Find-NodeRuntime).Executable (Join-Path $script:SetupRoot '.sandbox/setup/node-v22.23.3-win-x64/node.exe') 'Private runtime takes precedence on later setup runs'
-    Assert-Equal (Find-PythonRuntime).Executable 'C:\Python Runtime\python.exe' 'Discovery skips old/wrong-architecture Python'
+    Assert-Equal (Find-PythonRuntime).Executable 'C:\Python Runtime\python.exe' 'Discovery selects an x64 interpreter on ARM64 and skips old/native ARM64/32-bit Python'
     Assert-Equal (@($script:captured | Where-Object { $_ -match 'WindowsApps' }).Count) 0 'Store aliases are never invoked'
     $env:CLAUDE_SYNC_PYTHON = 'C:\Old\python.exe'
     Assert-Throws { Find-PythonRuntime } 'CLAUDE_SYNC_PYTHON'
@@ -130,6 +159,42 @@ try {
     Install-Prerequisite 'Node.js' 'OpenJS.NodeJS.LTS'
     Install-Prerequisite 'Python' 'Python.Python.3.14'
     Assert-Equal ($script:installCalls -join '|') 'install --id OpenJS.NodeJS.LTS --exact --source winget --architecture x64 --accept-package-agreements --accept-source-agreements --disable-interactivity|refresh-path|verified-node-fallback|refresh-path|signed-python-fallback|refresh-path' 'Missing WinGet chooses verified official fallbacks'
+
+    # Suppress download progress without changing the caller or cleanup policy.
+    $downloadTestDirectory = Join-Path ([IO.Path]::GetTempPath()) ('claude-sync-download-test-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $downloadTestDirectory | Out-Null
+    try {
+        $ProgressPreference = 'Stop'
+        $script:downloadFails = $false
+        function Invoke-WebRequest([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile) {
+            $script:downloadProgressPreference = $ProgressPreference
+            [IO.File]::WriteAllText($OutFile, 'synthetic download fixture')
+            if ($script:downloadFails) { throw 'Synthetic download failure' }
+        }
+        function Move-Item([string]$LiteralPath, [string]$Destination, [switch]$Force) {
+            $script:moveProgressPreference = $ProgressPreference
+            Microsoft.PowerShell.Management\Move-Item -LiteralPath $LiteralPath -Destination $Destination -Force:$Force
+        }
+        function Remove-Item([string]$LiteralPath, [switch]$Force) {
+            $script:cleanupProgressPreference = $ProgressPreference
+            Microsoft.PowerShell.Management\Remove-Item -LiteralPath $LiteralPath -Force:$Force
+        }
+        $destination = Join-Path $downloadTestDirectory 'download.bin'
+        Save-OfficialDownload 'https://nodejs.org/synthetic-fixture' $destination
+        Assert-Equal $script:downloadProgressPreference 'SilentlyContinue' 'Only download progress is suppressed'
+        Assert-Equal $script:moveProgressPreference 'Stop' 'Original progress preference is restored before renaming'
+        Assert-Equal $ProgressPreference 'Stop' 'Successful download preserves the caller preference'
+        Assert-Equal (Test-Path -LiteralPath $destination) $true 'Successful download is retained'
+        $script:downloadFails = $true
+        Assert-Throws { Save-OfficialDownload 'https://nodejs.org/synthetic-fixture' $destination } 'Synthetic download failure'
+        Assert-Equal $script:cleanupProgressPreference 'Stop' 'Failed download restores progress before cleanup'
+        Assert-Equal $ProgressPreference 'Stop' 'Failed download preserves the caller preference'
+        Assert-Equal (Test-Path -LiteralPath ($destination + '.partial')) $false 'Failed partial download is removed'
+    } finally {
+        $ProgressPreference = $previousProgressPreference
+        Microsoft.PowerShell.Management\Remove-Item -LiteralPath $downloadTestDirectory -Recurse -Force
+        Microsoft.PowerShell.Management\Remove-Item -LiteralPath Function:Invoke-WebRequest, Function:Move-Item, Function:Remove-Item
+    }
 
     # Fail closed on altered downloads and invalid/wrong-publisher certificates.
     ${function:Assert-FileHash} = $originalHash
@@ -164,4 +229,5 @@ try {
 } finally {
     $env:CLAUDE_SYNC_PYTHON = $previousOverride
     $env:Path = $previousPath
+    $ProgressPreference = $previousProgressPreference
 }

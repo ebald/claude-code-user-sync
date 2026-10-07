@@ -597,7 +597,8 @@ def audit_assets(records: list[dict], projects: Path, backup_dir: Path | None = 
             record(("invalid_reference", source, str(transcript)),
                    {"kind": "image" if image else "file", "status": "unsafe", "reason": "invalid_reference"})
             return
-        raw = raw.strip()
+        # Whitespace is part of a local path. Trimming it can turn an unsafe
+        # Windows alias into a different, valid file before validation.
         if source == "markdown" and ("${" in raw or "{{" in raw or "}}" in raw or raw.startswith("$(")):
             return
         # A source-code citation is a path plus an editor location, not a URI.
@@ -610,8 +611,12 @@ def audit_assets(records: list[dict], projects: Path, backup_dir: Path | None = 
                 if match.group(3) is not None:
                     citation["column"] = int(match.group(3))
         windows_path = os.name == "nt" and bool(re.match(r"^[A-Za-z]:[\\/]", raw))
+        # urlsplit strips leading ASCII whitespace and embedded tabs/newlines.
+        # Only parse a URI when its scheme starts at the first character;
+        # ordinary paths must reach filesystem validation without that rewrite.
+        literal_path = windows_path or not re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw)
         try:
-            parsed = urlsplit("") if windows_path else urlsplit(raw)
+            parsed = urlsplit("") if literal_path else urlsplit(raw)
         except ValueError:
             record(("invalid_reference", source, str(transcript)),
                    {"kind": "image" if image else "file", "status": "unsafe", "reason": "invalid_reference"})
@@ -632,8 +637,10 @@ def audit_assets(records: list[dict], projects: Path, backup_dir: Path | None = 
             return
         elif raw.startswith("#"):
             return
-        else:
-            raw = unquote(parsed.path)
+        elif source == "markdown":
+            # Relative Markdown links have URL query/fragment semantics. Split
+            # those delimiters without urlsplit's whitespace normalization.
+            raw = unquote(re.split(r"[?#]", raw, maxsplit=1)[0])
         if source == "markdown" and not image and context and context.startswith("tool:") and raw.startswith(("/docs/", "/learn/")):
             record(("navigation", raw), {"kind": "link", "status": "navigation", "url": raw, "reason": "documentation_navigation"})
             return

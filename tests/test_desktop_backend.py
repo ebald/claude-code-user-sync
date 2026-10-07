@@ -361,6 +361,65 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(self.driver.close(), {"closed": True})
         request.assert_called_once_with({42, 43})
 
+    def test_windows_final_poll_timeout_requests_manual_quit_without_other_actions(self):
+        self.driver.platform = "win32"
+        running = subprocess.CompletedProcess([], 0, '"Claude.exe","42","Console","1","1 K"', "")
+        with mock.patch.object(backend.subprocess, "run", side_effect=[
+                running, running, subprocess.TimeoutExpired("tasklist", 0.2)]) as run, \
+                mock.patch.object(backend, "request_windows_shutdown") as request, \
+                mock.patch.object(backend.time, "monotonic", side_effect=[0, 1, 29.8, 30.01]), \
+                mock.patch.object(backend.time, "sleep"), \
+                mock.patch.object(backend.os, "kill") as kill, \
+                mock.patch.object(backend.subprocess, "Popen") as launch, \
+                mock.patch.object(self.driver, "open") as reopen, \
+                mock.patch.object(claude_sync, "sync_accounts") as sync:
+            with self.assertRaises(backend.BackendError) as caught:
+                self.driver.close()
+        self.assertEqual(caught.exception.code, "CLOSE_FAILED")
+        request.assert_called_once_with({42})
+        self.assertEqual(run.call_count, 3)
+        self.assertAlmostEqual(run.call_args.kwargs["timeout"], 0.2)
+        kill.assert_not_called()
+        launch.assert_not_called()
+        reopen.assert_not_called()
+        sync.assert_not_called()
+        self.assertFalse(self.storage.exists())
+
+    def test_windows_initial_poll_timeout_does_not_request_shutdown(self):
+        self.driver.platform = "win32"
+        with mock.patch.object(backend.subprocess, "run", side_effect=subprocess.TimeoutExpired("tasklist", 30)), \
+                mock.patch.object(backend, "request_windows_shutdown") as request, \
+                mock.patch.object(backend.time, "monotonic", return_value=0):
+            with self.assertRaises(backend.BackendError) as caught:
+                self.driver.close()
+        self.assertEqual(caught.exception.code, "PROCESS_CHECK_FAILED")
+        request.assert_not_called()
+        self.assertFalse(self.storage.exists())
+
+    def test_windows_poll_timeout_before_deadline_stays_process_check_failure(self):
+        self.driver.platform = "win32"
+        running = subprocess.CompletedProcess([], 0, '"Claude.exe","42","Console","1","1 K"', "")
+        with mock.patch.object(backend.subprocess, "run", side_effect=[
+                running, subprocess.TimeoutExpired("tasklist", 29)]), \
+                mock.patch.object(backend, "request_windows_shutdown") as request, \
+                mock.patch.object(backend.time, "monotonic", side_effect=[0, 1, 2]):
+            with self.assertRaises(backend.BackendError) as caught:
+                self.driver.close()
+        self.assertEqual(caught.exception.code, "PROCESS_CHECK_FAILED")
+        request.assert_called_once_with({42})
+
+    def test_windows_invalid_final_listing_stays_process_check_failure(self):
+        self.driver.platform = "win32"
+        running = subprocess.CompletedProcess([], 0, '"Claude.exe","42","Console","1","1 K"', "")
+        invalid = subprocess.CompletedProcess([], 0, "not a process list", "")
+        with mock.patch.object(backend.subprocess, "run", side_effect=[running, invalid]), \
+                mock.patch.object(backend, "request_windows_shutdown") as request, \
+                mock.patch.object(backend.time, "monotonic", side_effect=[0, 29.8, 30.01]):
+            with self.assertRaises(backend.BackendError) as caught:
+                self.driver.close()
+        self.assertEqual(caught.exception.code, "PROCESS_CHECK_FAILED")
+        request.assert_called_once_with({42})
+
     def test_shutdown_timeout_never_terminates_or_reopens(self):
         with mock.patch.object(backend, "mac_process_state", return_value=(False, True)), \
                 mock.patch.object(backend.time, "monotonic", side_effect=[0, 31]), \

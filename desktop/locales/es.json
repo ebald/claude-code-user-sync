@@ -112,7 +112,7 @@
     "CLAUDE_NOT_FOUND": "No se encontró Claude. Elige su aplicación en Configuración y vuelve a intentarlo.",
     "NO_CHATS": "No se encontraron chats de Claude Code. Crea un chat en Code dentro de Claude Desktop o revisa la carpeta de datos en Configuración.",
     "CATALOG_INVALID": "No se pudieron leer algunos datos de chats. Consulta los detalles antes de volver a intentarlo.",
-    "CLOSE_FAILED": "Claude sigue abierto. Termina tus tareas y cierra Claude antes de volver a intentarlo.",
+    "CLOSE_FAILED": "Claude sigue en ejecución. Termina tus tareas, sal de Claude por completo desde su menú o la bandeja del sistema y vuelve a intentarlo.",
     "OPEN_FAILED": "Claude no se reabrió. Pulsa Abrir Claude para intentarlo de nuevo o ábrelo manualmente.",
     "PROCESS_CHECK_FAILED": "No se pudo confirmar si Claude se cerró. Consulta los detalles antes de volver a intentarlo.",
     "SYNC_FAILED": "No se pudo completar la sincronización. Consulta los detalles antes de volver a intentarlo.",

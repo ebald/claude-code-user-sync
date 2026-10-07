@@ -6,13 +6,19 @@ Una interfaz Electron compartida para macOS, Windows y Linux, con el motor Pytho
 
 ## Ejecutar desde el código fuente
 
-Usa macOS 13 o posterior, Windows 10/11 o Ubuntu 22.04+/Debian 12+ con la [beta oficial de Claude Desktop para Linux](https://code.claude.com/docs/en/desktop-linux). Linux admite x64 y arm64. Ejecuta la aplicación en Windows nativo, fuera de WSL. Las aplicaciones empaquetadas ya incluyen Electron y Python; la preparación siguiente sirve para una copia descargada o clonada del código fuente.
+Usa macOS 13 o posterior, Windows 10/11 x64, Windows 11 ARM64 o Ubuntu 22.04+/Debian 12+ con la [beta oficial de Claude Desktop para Linux](https://code.claude.com/docs/en/desktop-linux). Linux admite x64 y arm64. Ejecuta la aplicación en Windows, fuera de WSL. En Windows 11 ARM64, Node.js, Python y Electron x64 funcionan mediante la [emulación x64](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation) del sistema. Windows 10 ARM64 no es compatible. El instalador empaquetado sigue siendo x64; no se ofrece una compilación nativa para Windows ARM64. Las aplicaciones empaquetadas ya incluyen Electron y Python; la preparación siguiente sirve para una copia descargada o clonada del código fuente.
+
+La pestaña Code de Claude Desktop requiere una [suscripción Pro, Max, Team o Enterprise](https://code.claude.com/docs/en/desktop-quickstart).
+
+En Windows, si Claude solicita Git antes de una conversación Local, instala [Git para Windows](https://git-scm.com/downloads/win), luego cierra y vuelve a abrir Claude, o actualiza Claude si no usas worktrees; consulta la [solución de problemas de Git en Claude](https://code.claude.com/docs/en/desktop#git-and-git-lfs-errors). La preparación no instala Claude Desktop ni Git, y el sincronizador no necesita Git si se descarga como ZIP.
 
 ### Preparación automática
 
-Desde la raíz del proyecto, ejecuta `bash ./setup.sh` en macOS o Linux, o `.\setup.bat` en PowerShell de Windows x64 nativo. En macOS también puedes abrir `setup.command` con doble clic; en Windows, abre `setup.bat` con doble clic.
+Desde la raíz del proyecto, ejecuta `bash ./setup.sh` en macOS o Linux, o `.\setup.bat` en PowerShell de Windows 10/11 x64 o Windows 11 ARM64. En macOS también puedes abrir `setup.command` con doble clic; en Windows, abre `setup.bat` con doble clic.
 
-Los scripts comprueban las herramientas instaladas, instalan los requisitos que falten, ejecutan `npm ci --include=dev` y abren la aplicación Electron. La instalación requiere conexión a internet. Abrir la aplicación no sincroniza datos de Claude. Se reutilizan las instalaciones existentes y compatibles de Node.js, npm y Python.
+En macOS, `setup.sh` prepara y abre la aplicación desde el código fuente; no instala un `.app` en Aplicaciones. Instala el `.app` empaquetado por separado siguiendo las instrucciones del DMG más abajo.
+
+Los scripts comprueban las herramientas instaladas, instalan los requisitos que falten, ejecutan `npm ci --include=dev` y abren la aplicación Electron. La instalación requiere conexión a internet. El primer inicio puede terminar de descargar el runtime de Electron; mantén la conexión hasta que se abra la aplicación. Abrir la aplicación no sincroniza datos de Claude. Se reutilizan las instalaciones existentes y compatibles de Node.js, npm y Python. La preparación de Windows selecciona herramientas x64 en ambas arquitecturas compatibles; la preparación desde el código fuente, el inicio normal y la vista previa Electron se han verificado en una VM Windows 11 ARM64.
 
 En Linux, cuando AppArmor restringe el inicio de Electron desde el código fuente, la preparación predeterminada compila e instala el paquete `.deb` y abre la aplicación instalada como tu usuario normal. La instalación puede solicitar tu contraseña de administrador. Después, ábrela directamente desde el menú de aplicaciones. Esto cubre las restricciones de Ubuntu 24.04 y posteriores. `--no-launch` prepara las dependencias del código fuente sin compilar ni instalar el paquete de la aplicación; `--check` informa del modo de inicio necesario sin cambiar nada.
 
@@ -37,7 +43,7 @@ Los mensajes de consola están en inglés; la aplicación sigue la preferencia d
 
 Si la preparación automática usó un runtime local del proyecto, abre la aplicación mediante el script de preparación en las siguientes ocasiones. Los comandos manuales `npm` requieren Node.js y npm en tu PATH normal.
 
-Instala Node.js 22.12 o posterior, npm y Python 3.10 o posterior. En macOS, tu instalación de Python también debe ser compatible con tu versión de macOS para abrir desde el código fuente. Desde la raíz del proyecto:
+Instala Node.js 22.12 o posterior, npm y Python 3.10 o posterior. En macOS, tu instalación de Python también debe ser compatible con tu versión de macOS para abrir desde el código fuente. En Windows, instala las versiones x64 de Node.js y Python, también en Windows 11 ARM64. Desde la raíz del proyecto:
 
 ```sh
 npm ci
@@ -57,6 +63,8 @@ La preparación descarga Electron y las dependencias de compilación. La aplicac
 5. Cuando Claude se abra de nuevo, cierra sesión e inicia sesión en la cuenta que quieras usar.
 
 La aplicación solicita un cierre normal, espera hasta 30 segundos y comprueba que Claude se haya cerrado antes de escribir los catálogos. En Linux, el cierre automático está disponible para la instalación oficial verificada de Claude Desktop; termina también los terminales activos de Claude Code. Si no se puede solicitar el cierre de forma segura o quedan procesos activos, cierra Claude por completo e inténtalo de nuevo. La aplicación no fuerza el cierre. El cambio de cuenta sigue siendo manual. Las tres plataformas usan la misma interfaz y flujo; el backend de cada plataforma se ocupa de localizar y cerrar Claude.
+
+En Windows, Claude puede seguir ejecutándose en la bandeja del sistema después de cerrar su ventana. Si el cierre automático no termina, completa las tareas activas, elige **Salir** (**Quit/Exit**) en el menú de Claude o de su icono en la bandeja y vuelve a intentar la sincronización.
 
 La cantidad de cuentas procede de las carpetas locales de cuentas, en lugar del número de perfiles de organización. Una cuenta puede tener más de un perfil de organización.
 
@@ -114,9 +122,11 @@ npm run build:mac
 
 El comando empaqueta el backend y genera un DMG y ZIP en `release/` para la arquitectura del Mac actual. La aplicación incluye Electron y Python, por lo que el Mac de destino no necesita instalar Node.js ni Python aparte. El requisito de macOS es la versión más reciente entre el mínimo de Electron y el mínimo del Python incluido. La compilación registra ese requisito en la aplicación, por lo que un paquete puede necesitar una versión posterior a macOS 13. La compilación local recibe una firma ad hoc y no está notarizada.
 
+Para instalar la aplicación empaquetada del Mac, abre el DMG y copia **Claude Code User Sync.app** a **Aplicaciones**; después ábrela desde allí. El paquete incluye sus runtimes y no necesita `setup.sh`.
+
 ### Windows
 
-En Windows x64 con Node.js y Python x64, desde PowerShell:
+En Windows x64 con Node.js y Python x64, desde PowerShell. Esto crea un paquete x64; aún no se ha verificado la compilación en un equipo ARM64:
 
 ```powershell
 npm.cmd run build:win
@@ -167,6 +177,14 @@ npm run smoke:packaged
 ```
 
 Estas comprobaciones abren la aplicación Electron desde el código fuente o empaquetada en modo de vista previa, ejercitan los tres idiomas y el flujo de sincronización simulado, y comprueban el estado de éxito.
+
+En un Mac con Apple silicon, la compilación local Electron 1.3.0 ARM64 se instaló desde su DMG en Aplicaciones. Las comprobaciones de la aplicación instalada pasaron para inglés, español, portugués y la selección automática del idioma del sistema. Una sincronización real iniciada por el usuario terminó, creó su copia de seguridad y reabrió Claude. Esto verifica ese flujo local; otras versiones de Claude Desktop pueden cambiar el formato interno de sus catálogos.
+
+El inicio predeterminado de `setup.sh` también pasó usando las herramientas existentes. En una copia nueva del código fuente cuya carpeta tenía espacios en el nombre y con Node.js no disponible para la preparación, el script descargó y verificó Node.js 22.23.3 oficial, reutilizó Python instalado y abrió la aplicación. La descarga, el SHA-256 y la firma del instalador del paquete oficial de Python se verificaron por separado; aún no se ha probado la instalación con permisos de administrador en un Mac sin Python.
+
+En una máquina virtual Windows 11 ARM64, `setup.bat --check` informó correctamente de los requisitos ausentes, `--no-launch` instaló Node.js y Python x64 desde descargas oficiales verificadas y las dependencias npm como usuario normal, y la comprobación final `--check` pasó. Las comprobaciones automatizadas de JavaScript y Python terminaron sin fallos. Una comprobación de la vista previa desde el código fuente pasó y terminó normalmente tras verificar inglés, español y portugués, la selección automática de inglés del sistema, la cantidad real de cuentas locales, el estado de éxito traducido y el aislamiento del renderer.
+
+La ejecución predeterminada de `.\setup.bat` también reutilizó las herramientas, instaló las dependencias fijadas y abrió la aplicación real. Detectó perfiles locales inicializados, inició en el idioma del sistema (inglés) y cambió a portugués y de nuevo a **Idioma del sistema** (inglés). Cerrar su ventana normalmente terminó con código de salida 0. La sincronización autenticada en Windows, el instalador empaquetado y la compilación en un equipo ARM64 siguen sin verificar.
 
 GitHub Actions está configurado para ejecutar pruebas Python con datos sintéticos en macOS, Windows y Linux, ejecutar las pruebas de Electron, compilar un backend independiente y generar una aplicación sin instalador en cada sistema operativo. Las pruebas automatizadas y de vista previa no demuestran que funcionen todos los flujos autenticados de Claude Desktop.
 

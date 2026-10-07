@@ -248,6 +248,28 @@ class AssetAuditTests(unittest.TestCase):
         self.assertEqual(report["entries"][0]["scope"], "reference")
         self.assertEqual(report["entries"][0]["citations"], [{"line": 12}, {"line": 34, "column": 5}])
 
+    def test_relative_markdown_query_and_fragment_refer_to_the_file(self):
+        source = self.cwd / "report.txt"
+        source.write_bytes(b"Synthetic Markdown destination")
+        self.write_transcript([{"type": "text", "text":
+            "[Fragment](report.txt#results) [Query](report.txt?download=1) "
+            "[Both](report.txt?download=1#results)"}])
+        report = self.audit()
+        self.assertEqual(report["summary"]["local_files"], 1)
+        self.assertEqual(report["summary"]["missing_files"], 0)
+        self.assertEqual(report["entries"][0]["path"], str(source))
+        self.assertEqual(report["entries"][0]["sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+
+    def test_markdown_fragment_does_not_trim_a_leading_space_path(self):
+        source = self.cwd / "report.txt"
+        source.write_bytes(b"Do not copy through a trimmed Markdown link")
+        self.write_transcript([{"type": "text", "text": "[Report](< report.txt#results>)"}])
+        report = self.audit(backup_dir=self.base / "backup")
+        entry = next(e for e in report["entries"] if e.get("path") == str(self.cwd / " report.txt"))
+        self.assertEqual(entry["status"], "missing")
+        self.assertEqual(report["summary"]["backed_up_files"], 0)
+        self.assertFalse((self.base / "backup/assets").exists())
+
     def test_templates_are_not_files_but_missing_artifact_image_and_reference_stay_visible(self):
         self.record["publishedArtifacts"] = [{"sourcePath": "missing-output.html"}]
         self.write_transcript([{"type": "text", "text": "[Template](${file.url}) [Second](${data.instagram}) ![Image](missing-image.png) [Source](missing-source.ts:14)"}])
@@ -358,9 +380,18 @@ class AssetAuditTests(unittest.TestCase):
         source.write_bytes(b"original synthetic report")
         self.write_transcript([{"type": "tool_use", "name": "SendUserFile", "id": "send", "input": {"files": [str(source)]}}])
         original_stream = asset_audit._stream_hash
+        source_info = source.stat()
+        source_identity = (source_info.st_dev, source_info.st_ino)
+        source_checks = []
 
         def change_after_read(stream, output=None):
             digest = original_stream(stream, output)
+            info = os.fstat(stream.fileno())
+            if (info.st_dev, info.st_ino) != source_identity:
+                return digest
+            # Output preparation hashes a separate backup after the original
+            # source handle has closed; only its own read must lock this file.
+            source_checks.append(True)
             if os.name == "nt":
                 with self.assertRaises(OSError):
                     source.write_bytes(b"modified during snapshot")
@@ -378,6 +409,55 @@ class AssetAuditTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "changed"):
                     self.audit(backup_dir=self.base / "backup")
                 self.assertEqual(list((self.base / "backup/assets").iterdir()), [])
+        self.assertEqual(len(source_checks), 1)
+
+    def test_reference_with_trailing_space_does_not_copy_a_different_file(self):
+        source = self.cwd / "report.txt"
+        source.write_bytes(b"Do not copy through a trimmed path")
+        reference = str(source) + " "
+        self.write_transcript([{"type": "tool_use", "name": "SendUserFile", "id": "send",
+                                "input": {"files": [reference]}}])
+        report = self.audit(backup_dir=self.base / "backup")
+        entry = next(e for e in report["entries"] if e.get("path") == reference)
+        self.assertEqual(entry["status"], "unsafe" if os.name == "nt" else "missing")
+        if os.name == "nt":
+            self.assertEqual(entry["reason"], "unsupported_windows_path")
+        self.assertEqual(report["summary"]["backed_up_files"], 0)
+        self.assertFalse((self.base / "backup/assets").exists())
+        self.assertEqual(source.read_bytes(), b"Do not copy through a trimmed path")
+
+    def test_reference_with_leading_whitespace_does_not_copy_a_different_file(self):
+        source = self.cwd / "report.txt"
+        source.write_bytes(b"Do not copy through a trimmed path")
+        for prefix in (" ", "\t", "\n"):
+            with self.subTest(prefix=prefix):
+                reference = prefix + "report.txt"
+                self.write_transcript([{"type": "tool_use", "name": "SendUserFile", "id": "send",
+                                        "input": {"files": [reference]}}])
+                report = self.audit(backup_dir=self.base / "backup")
+                entry = next(e for e in report["entries"] if e.get("path") == str(self.cwd / reference))
+                status = "unsafe" if os.name == "nt" and prefix != " " else "missing"
+                self.assertEqual(entry["status"], status)
+                if status == "unsafe":
+                    self.assertEqual(entry["reason"], "unsupported_windows_path")
+                self.assertEqual(report["summary"]["backed_up_files"], 0)
+                self.assertFalse((self.base / "backup/assets").exists())
+        self.assertEqual(source.read_bytes(), b"Do not copy through a trimmed path")
+
+    def test_existing_leading_space_path_and_file_uri_use_the_exact_file(self):
+        source = self.cwd / " %20report.txt"
+        source.write_bytes(b"The file with leading whitespace")
+        different = self.cwd / "report.txt"
+        different.write_bytes(b"A different file without whitespace")
+        self.write_transcript([{"type": "tool_use", "name": "SendUserFile", "id": "send",
+                                "input": {"files": [source.name, source.as_uri()]}}])
+        report = self.audit(backup_dir=self.base / "backup")
+        entry = next(e for e in report["entries"] if e["status"] == "available")
+        self.assertEqual(entry["path"], str(source))
+        self.assertEqual(report["summary"]["local_files"], 1)
+        self.assertEqual(Path(entry["backup_path"]).read_bytes(), source.read_bytes())
+        self.assertEqual(Path(entry["output_path"]).read_bytes(), source.read_bytes())
+        self.assertEqual(different.read_bytes(), b"A different file without whitespace")
 
     def test_backup_write_failure_aborts_and_removes_partial_copy(self):
         source = self.cwd / "report.txt"

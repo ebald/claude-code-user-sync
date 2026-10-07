@@ -23,16 +23,19 @@ A ferramenta não transfere chats entre contas na nuvem ou computadores e não s
 
 ## Requisitos
 
-- macOS 13 ou mais recente, Windows 10/11 ou Ubuntu 22.04+/Debian 12+, com Claude Desktop e conversas locais na aba Code. Consulte o [guia de instalação para macOS/Windows](https://support.claude.com/en/articles/10065433-install-claude-desktop) ou o [guia oficial do beta Linux](https://code.claude.com/docs/en/desktop-linux). O Linux oferece x64 e arm64.
-- Pelo menos dois perfis de conta inicializados localmente. Entre em cada conta, abra a aba Code, selecione o ambiente Local e crie uma conversa nesse computador.
-- Para executar pelo código-fonte: **Node.js 22.12 ou mais recente**, npm e **Python 3.10 ou mais recente**. O motor Python usa somente a biblioteca padrão. No macOS, use uma instalação de Python compatível com sua versão do macOS.
+- macOS 13 ou mais recente, Windows 10/11 x64, Windows 11 ARM64 ou Ubuntu 22.04+/Debian 12+, com Claude Desktop e conversas locais na aba Code. Consulte o [guia de instalação para macOS/Windows](https://support.claude.com/en/articles/10065433-install-claude-desktop) ou o [guia oficial do beta Linux](https://code.claude.com/docs/en/desktop-linux). O Linux oferece x64 e arm64.
+- Pelo menos dois perfis de conta inicializados localmente com acesso à aba Code por uma [assinatura Pro, Max, Team ou Enterprise](https://code.claude.com/docs/en/desktop-quickstart). Entre em cada conta, abra a aba Code, selecione o ambiente Local e crie uma conversa nesse computador.
+- Para executar pelo código-fonte: **Node.js 22.12 ou mais recente**, npm e **Python 3.10 ou mais recente**. O motor Python usa somente a biblioteca padrão. No macOS, use uma instalação de Python compatível com sua versão do macOS. No Windows, use Node.js e Python x64; o Windows 11 ARM64 executa essas ferramentas e o Electron pela emulação x64.
 - Os aplicativos empacotados incluem Electron e Python. O computador de destino não precisa instalar Node.js nem Python separadamente. Uma compilação para macOS pode exigir uma versão mais recente que o macOS 13, dependendo do Python usado para compilá-la.
 
 | Sistema | Aplicativo | Verificação |
 | --- | --- | --- |
-| macOS | Aplicativo Electron para a arquitetura do Mac usado na compilação | Testes automatizados e prévia locais; o fluxo autenticado depende do formato interno do Claude Desktop |
-| Windows | A mesma interface Electron e instalador Windows x64 | Experimental; a sincronização autenticada no Claude Desktop ainda não foi verificada em uma máquina Windows |
+| macOS | Aplicativo Electron para a arquitetura do Mac usado na compilação | Instalação empacotada ARM64, três idiomas, seleção do idioma do sistema e sincronização real com backup e reabertura do Claude verificadas localmente |
+| Windows 10/11 x64 | A mesma interface Electron e instalador Windows x64 | Experimental; a sincronização autenticada no Claude Desktop ainda não foi verificada em uma máquina Windows |
+| Windows 11 ARM64 | Node.js, Python e Electron x64 pela emulação do Windows; o instalador empacotado continua x64 | Preparação pelo código-fonte, abertura normal e prévia Electron verificadas em uma VM; a sincronização autenticada e o instalador empacotado continuam sem verificação |
 | Linux | A mesma interface Electron, com instalador Debian e arquivo portátil para a arquitetura da máquina de compilação | Experimental; a sincronização autenticada no Claude Desktop ainda não foi verificada em uma máquina Linux |
+
+O Windows 11 ARM64 usa a [emulação x64](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation) incluída no sistema. O Windows 10 ARM64 não é compatível. Não há uma compilação nativa do aplicativo para Windows ARM64.
 
 No Windows, use o PowerShell normal, fora do WSL. Compile no sistema de destino para incluir o executável Python adequado.
 
@@ -47,23 +50,25 @@ cd claude-code-user-sync
 
 Execute os comandos abaixo na pasta baixada ou clonada. Instale o Claude Desktop separadamente e inicialize suas conversas locais na aba Code antes de sincronizar.
 
+No Windows, se o Claude pedir Git antes de uma conversa Local, instale o [Git para Windows](https://git-scm.com/downloads/win), depois encerre e reabra o Claude, ou atualize o Claude se não usa worktrees; consulte a [solução de problemas de Git no Claude](https://code.claude.com/docs/en/desktop#git-and-git-lfs-errors). A preparação não instala o Claude Desktop nem o Git, e o sincronizador não precisa de Git quando baixado como ZIP.
+
 ## Preparação automática
 
-Os aplicativos empacotados já incluem Electron e Python. Os scripts de preparação servem para executar este projeto pelo código-fonte: conferem as ferramentas existentes, instalam os requisitos ausentes, baixam as dependências e abrem o aplicativo. Abrir o aplicativo **não** inicia uma sincronização; você escolhe quando sincronizar na interface.
+Os aplicativos empacotados já incluem Electron e Python. Os scripts de preparação servem para executar este projeto pelo código-fonte: conferem as ferramentas existentes, instalam os requisitos ausentes, baixam as dependências e abrem o aplicativo. No macOS, `setup.sh` prepara e abre o aplicativo pelo código-fonte; não instala um `.app` em Aplicativos. Abrir o aplicativo **não** inicia uma sincronização; você escolhe quando sincronizar na interface.
 
 | Sistema | Iniciar a preparação automática |
 | --- | --- |
 | macOS | Clique duas vezes em `setup.command` no Finder, ou execute `bash ./setup.sh` no Terminal |
-| Windows x64 | Clique duas vezes em `setup.bat` no Explorador de Arquivos, ou execute `.\setup.bat` no PowerShell |
+| Windows 10/11 x64 ou Windows 11 ARM64 | Clique duas vezes em `setup.bat` no Explorador de Arquivos, ou execute `.\setup.bat` no PowerShell |
 | Ubuntu / Debian | Execute `bash ./setup.sh` no terminal do seu usuário normal |
 
-A instalação precisa de conexão com a internet. As versões compatíveis de Node.js, npm e Python já instaladas são reutilizadas. O console de preparação usa inglês; o aplicativo abre no idioma compatível do sistema e oferece inglês, espanhol e português.
+A instalação precisa de conexão com a internet. A primeira abertura pode terminar de baixar o runtime do Electron; mantenha a conexão até o aplicativo abrir. As versões compatíveis de Node.js, npm e Python já instaladas são reutilizadas. O console de preparação usa inglês; o aplicativo abre no idioma compatível do sistema e oferece inglês, espanhol e português.
 
 Se o Node.js estiver ausente ou for antigo demais, o script do macOS/Linux baixa uma distribuição oficial verificada na pasta `.sandbox/setup/`, ignorada pelo Git, e a usa para este aplicativo. No macOS, o Python ausente é instalado por um pacote oficial assinado. No Ubuntu/Debian, o `apt` instala o Python, o suporte a ambientes virtuais e as bibliotecas do Electron que estiverem faltando. A instalação de pacotes do sistema pede privilégios de administrador quando precisa; o aplicativo executa como seu usuário normal.
 
 No Linux em que o AppArmor restringe a abertura do Electron pelo código-fonte, a preparação padrão compila e instala o pacote `.deb` e abre o aplicativo instalado. A instalação pode pedir sua senha de administrador. Depois de instalar, abra o aplicativo diretamente pelo menu de aplicativos nas próximas vezes. Isso trata as restrições usadas pelo Ubuntu 24.04 e versões mais recentes; `--check` informa quando essa forma de abertura é necessária sem fazer alterações.
 
-No Windows, a preparação usa PowerShell e [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/) quando disponível. Caso contrário, verifica os downloads oficiais do Node.js e Python e os instala para este projeto em `.sandbox/setup/`; o instalador do Python usa uma instalação para o seu usuário. O Windows pode mostrar a solicitação normal de permissões do instalador. A preparação não altera a política global de execução do PowerShell. Os caminhos selecionados só se aplicam ao processo de preparação e ao aplicativo.
+A preparação do Windows seleciona Node.js e Python x64 nas duas arquiteturas compatíveis. No Windows 11 ARM64, essas ferramentas e o aplicativo Electron executam pela emulação x64. No Windows, a preparação usa PowerShell e [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/) quando disponível. Caso contrário, verifica os downloads oficiais do Node.js e Python e os instala para este projeto em `.sandbox/setup/`; o instalador do Python usa uma instalação para o seu usuário. O Windows pode mostrar a solicitação normal de permissões do instalador. A preparação não altera a política global de execução do PowerShell. Os caminhos selecionados só se aplicam ao processo de preparação e ao aplicativo.
 
 Para conferir os requisitos sem instalar, baixar dependências ou abrir o aplicativo:
 
@@ -95,7 +100,7 @@ No Linux, `--no-launch` também pula a compilação e a instalação do pacote d
 
 Se a preparação automática usou um ambiente local do projeto, abra o aplicativo depois pelo script de preparação. Os comandos manuais de `npm` abaixo precisam de Node.js e npm no seu PATH normal.
 
-Instale [Node.js](https://nodejs.org/en/download) 22.12 ou mais recente e [Python](https://www.python.org/downloads/) 3.10 ou mais recente, depois instale as dependências fixadas no arquivo de lock do projeto:
+Instale [Node.js](https://nodejs.org/en/download) 22.12 ou mais recente e [Python](https://www.python.org/downloads/) 3.10 ou mais recente, depois instale as dependências fixadas no arquivo de lock do projeto. Para abrir pelo código-fonte no Windows, escolha as versões x64 das duas ferramentas, inclusive no Windows 11 ARM64:
 
 ```sh
 npm ci
@@ -139,6 +144,8 @@ npm run build:mac
 
 Gera um DMG e um ZIP em `release/` para a arquitetura do Mac atual. A compilação cria um ambiente Python isolado e empacota o motor com PyInstaller. Registra o requisito de macOS a partir do Electron e do Python incluído, usando a versão mínima mais recente dos dois. O aplicativo recebe uma assinatura local ad hoc e não é notarizado. Use `npm run pack` para gerar o aplicativo sem instalador.
 
+Para instalar o aplicativo empacotado no Mac, abra o DMG e copie **Claude Code User Sync.app** para **Aplicativos**; depois abra por essa pasta. O pacote inclui seus runtimes e não precisa de `setup.sh`.
+
 Consulte o [guia do Electron](../desktop/README.pt-BR.md) para detalhes de compilação, armazenamento e testes.
 
 ### Terminal ou Finder
@@ -155,7 +162,9 @@ Ou abra `sync.command` pelo Finder. Depois reabra o Claude e entre na conta dese
 
 ## Windows
 
-1. Instale Node.js 22.12 ou mais recente e Python 3.10 ou mais recente pelos sites oficiais, incluindo o inicializador Python. Abra um novo PowerShell depois da instalação.
+Use Windows 10/11 x64 ou Windows 11 ARM64. A opção ARM64 pelo código-fonte executa ferramentas x64 pela emulação do Windows e continua experimental.
+
+1. Instale **Node.js x64** 22.12 ou mais recente e **Python x64** 3.10 ou mais recente pelos sites oficiais, incluindo o inicializador Python. Abra um novo PowerShell depois da instalação.
 2. Abra o PowerShell na pasta deste projeto e execute `npm.cmd ci` se ainda não tiver feito isso.
 3. Confira os requisitos e inicie o mesmo aplicativo Electron usado no macOS:
 
@@ -167,6 +176,8 @@ Ou abra `sync.command` pelo Finder. Depois reabra o Claude e entre na conta dese
 
 O aplicativo segue automaticamente o idioma do sistema operacional. Você pode alterá-lo no seletor de idioma. Termine suas tarefas no Claude e clique no botão de sincronização e reabertura. O aplicativo solicita o encerramento normal, verifica se o Claude parou, sincroniza e tenta reabri-lo. Não força o encerramento. A troca de conta permanece manual. Se o Claude não for encontrado automaticamente, é possível selecionar seu executável.
 
+O Claude pode continuar executando na bandeja do sistema depois que sua janela fecha. Se o encerramento automático não terminar, conclua as tarefas ativas, escolha **Sair** (**Quit/Exit**) no menu do Claude ou de seu ícone na bandeja e tente a sincronização novamente.
+
 Para testar sem alterar os dados do Claude:
 
 ```powershell
@@ -175,7 +186,7 @@ npm.cmd run preview
 
 ### Compilar um instalador Windows
 
-Execute em um computador Windows x64 com Node.js e Python x64:
+Execute em um computador Windows x64 com Node.js e Python x64. O instalador empacotado é x64; não há compilação nativa ARM64, e a compilação em um computador ARM64 ainda não foi verificada:
 
 ```powershell
 npm.cmd run build:win
@@ -342,6 +353,14 @@ No Windows, use `npm.cmd test` e `py -3 -m unittest discover`. O GitHub Actions 
 A interface compartilhada usa **i18next** e dicionários JSON em `desktop/locales/` para inglês, espanhol e português brasileiro. As mesmas chaves atendem macOS, Windows e Linux, e os testes verificam a cobertura e as variáveis de interpolação. Por padrão, **Idioma do sistema** usa o idioma compatível preferido do sistema operacional. As variantes regionais de inglês e espanhol usam as respectivas traduções; todas as variantes de português usam português brasileiro. Se nenhum idioma preferido tiver tradução, o aplicativo usa inglês. A escolha manual é salva entre aberturas; selecione **Idioma do sistema** para voltar à seleção automática.
 
 As suítes usam catálogos e históricos sintéticos. Cobrem várias contas, perfis novos, sincronizações repetidas, conflitos, marcadores de exclusão, recuperação de artifacts, verificação de arquivos, planos desatualizados, reversão e o fluxo desktop.
+
+Em um Mac com Apple silicon, a compilação local Electron 1.3.0 ARM64 foi instalada pelo DMG em Aplicativos. As verificações do aplicativo instalado passaram para inglês, espanhol, português e seleção automática do idioma do sistema. Uma sincronização real iniciada pelo usuário terminou, criou seu backup e reabriu o Claude. Isso verifica esse fluxo local; outras versões do Claude Desktop podem mudar o formato interno dos catálogos.
+
+A abertura padrão por `setup.sh` também passou usando os runtimes existentes. Em uma cópia nova do código-fonte com espaços no nome da pasta e com Node.js indisponível para a preparação, o script baixou e verificou o Node.js 22.23.3 oficial, reutilizou o Python instalado e abriu o aplicativo. O download, o SHA-256 e a assinatura do instalador do pacote oficial do Python foram verificados separadamente; a instalação com privilégios de administrador em um Mac sem Python ainda não foi testada.
+
+Em uma máquina virtual Windows 11 ARM64, `setup.bat --check` informou corretamente os requisitos ausentes, `--no-launch` instalou Node.js e Python x64 por downloads oficiais verificados e as dependências npm como usuário normal, e a verificação final `--check` passou. As verificações automatizadas de JavaScript e Python terminaram sem falhas. Uma verificação da prévia Electron passou e encerrou normalmente após conferir os três idiomas, a seleção automática do inglês do sistema, a quantidade real de contas locais, o estado de sucesso traduzido e o isolamento do renderer.
+
+A execução padrão de `.\setup.bat` também reutilizou as ferramentas, instalou as dependências fixadas e abriu o aplicativo real. Detectou perfis locais inicializados, abriu no idioma do sistema (inglês) e mudou para português e novamente para **Idioma do sistema** (inglês). Fechar sua janela normalmente terminou com código de saída 0. Essas verificações não comprovam a sincronização autenticada no Windows, o instalador empacotado nem a compilação em um computador ARM64.
 
 Para uma verificação adicional de leitura com a versão fixa do Anthropic Agent SDK:
 

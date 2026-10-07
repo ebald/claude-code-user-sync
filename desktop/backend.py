@@ -36,7 +36,7 @@ ERROR_MESSAGES = {
     "NO_CHATS": "No local Claude Code chats were found on this computer.",
     "CATALOG_INVALID": "Could not validate the local chat catalogs. No chats were changed.",
     "PROCESS_CHECK_FAILED": "Could not confirm that Claude has closed. No chats were changed.",
-    "CLOSE_FAILED": "Claude is still running. Finish any active tasks, close Claude, and try again.",
+    "CLOSE_FAILED": "Claude is still running. Finish any active tasks, quit Claude completely from its menu or system tray, and try again.",
     "CLAUDE_RUNNING": "Finish any active tasks, quit Claude and any running Claude Code processes, and try again.",
     "OPEN_FAILED": "Claude did not reopen. Use Open Claude to try again.",
     "SYNC_BUSY": "Another synchronization is already running. Wait for it to finish before opening Claude.",
@@ -392,9 +392,19 @@ class DesktopBackend:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise BackendError("CLAUDE_RUNNING" if self.platform == "linux" else "CLOSE_FAILED")
-            running = (bool(windows_process_ids(timeout=remaining)) if self.platform == "win32"
-                       else linux_process_state(timeout=remaining).any_claude if self.platform == "linux"
-                       else mac_process_state(timeout=remaining)[1])
+            try:
+                running = (bool(windows_process_ids(timeout=remaining)) if self.platform == "win32"
+                           else linux_process_state(timeout=remaining).any_claude if self.platform == "linux"
+                           else mac_process_state(timeout=remaining)[1])
+            except BackendError as error:
+                # A final Windows poll can have less time than tasklist needs.
+                # Expiring the shutdown wait asks for a manual quit; an initial
+                # or otherwise unexpected process-check failure stays distinct.
+                if (self.platform == "win32" and error.code == "PROCESS_CHECK_FAILED"
+                        and isinstance(error.__cause__, subprocess.TimeoutExpired)
+                        and time.monotonic() >= deadline):
+                    raise BackendError("CLOSE_FAILED") from error
+                raise
             if not running:
                 return {"closed": True}
             time.sleep(min(0.25, remaining))
