@@ -393,7 +393,7 @@ npm test
 python3 -m unittest discover
 ```
 
-On Windows, use `py -3 -m unittest discover` for the Python suite. GitHub Actions is configured to run synthetic Python tests on macOS, Windows and Linux, test the Electron workflow and translations, and build a packaged backend and unpacked app on each platform.
+On Windows, use `py -3 -m unittest discover` for the Python suite. All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37614320977) in the public repository passed for commit `56d6950`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed.
 
 The desktop app uses **i18next** with English, Spanish and Brazilian Portuguese JSON dictionaries in `desktop/locales/`. One interface and the same translation keys serve macOS, Windows and Linux. Tests check language coverage and interpolation placeholders. The default **System language** setting uses the operating system’s preferred supported language. English and Spanish regional variants use their matching translations; all Portuguese variants use Brazilian Portuguese. If none of the preferred languages is supported, the app uses English. A manual language choice persists between launches; select **System language** to return to automatic selection.
 
@@ -401,7 +401,7 @@ The suites use synthetic catalogs and transcripts. They cover multiple accounts,
 
 On a Mac with Apple silicon, the local Electron 1.3.0 ARM64 build was installed from its DMG into Applications. Checks of the installed app passed for English, Spanish, Portuguese and automatic OS language selection. A real synchronization initiated by the user completed, created its backup and reopened Claude. This verifies that local workflow; other Claude Desktop versions can change its internal catalog format.
 
-The default `setup.sh` launch also passed using existing runtimes. In a fresh source copy with spaces in its folder name and Node.js made unavailable to setup, the script downloaded and verified official Node.js 22.23.3, reused the installed Python and opened the app. The official Python package's download, SHA-256 and installer signature were verified separately; administrator installation on a Mac without Python has not yet been tested.
+The default `setup.sh` launch passed using existing runtimes in a ZIP downloaded from the public GitHub repository without credentials; the real app opened in the OS language without starting synchronization. In a fresh source copy with spaces in its folder name and Node.js made unavailable to setup, the script downloaded and verified official Node.js 22.23.3, reused the installed Python and opened the app. The official Python package's download, SHA-256 and installer signature were verified separately; administrator installation on a Mac without Python has not yet been tested.
 
 In a Windows 11 ARM64 virtual machine, `setup.bat --check` correctly reported missing prerequisites, `--no-launch` installed verified official x64 Node.js and Python plus npm dependencies as a normal user, and a final `--check` passed. The JavaScript and Python automated checks completed without failures. An Electron preview smoke check passed and exited normally after checking all three languages, automatic English selection from the OS, the actual local account count, the localized success status and renderer isolation.
 
