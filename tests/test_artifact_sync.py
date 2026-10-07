@@ -15,7 +15,7 @@ class ArtifactSyncTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.root = self.base / "claude-app" / "registry"
         self.projects = self.base / "projects"
         self.profiles = [self.root / account / "org" for account in ("a", "b", "c")]
