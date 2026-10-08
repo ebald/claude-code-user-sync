@@ -70,7 +70,7 @@ A quantidade de contas vem das pastas locais de contas, em vez da quantidade de 
 
 Uma sincronização bem-sucedida usa o estado de sucesso. Arquivos ou históricos indisponíveis e divergências pendentes são informados especificamente e podem ser consultados nos diagnósticos. Os controles de arquivos e backups abrem o resultado salvo no gerenciador de arquivos do sistema operacional. Se a localização automática do Claude falhar, selecione o aplicativo ou executável do Claude pela interface.
 
-A sincronização autenticada pelo código-fonte foi verificada em uma VM Windows 11 ARM64 pela emulação x64. Os testes autenticados em um computador Windows x64 nativo, o instalador Windows empacotado e o fluxo no Linux continuam sem verificação.
+A sincronização autenticada pelo código-fonte foi verificada em uma VM Windows 11 ARM64 pela emulação x64. Os testes autenticados em um computador Windows x64 nativo, o instalador Windows empacotado e a sincronização autenticada no Linux continuam sem verificação. A preparação pelo código-fonte e a seleção de idioma foram verificadas no Debian 13.7 ARM64 com LXDE.
 
 ## Idiomas
 
@@ -138,13 +138,16 @@ O comando empacota o backend e gera um instalador NSIS em `release/`. O aplicati
 
 No Ubuntu 22.04+/Debian 12+ nativo, use Node.js e Python x64 ou arm64 correspondentes à arquitetura do computador. Compile na distribuição mais antiga que pretende atender (Ubuntu 22.04 é a referência); pacotes compilados em um sistema ou Python mais recente podem exigir bibliotecas Linux mais recentes.
 
+O empacotamento no Linux exige `python3-venv` e `binutils` (que fornece `objdump`); a preparação automática instala ambos.
+
 ```sh
+sudo apt install python3-venv binutils
 npm run build:linux
 ```
 
 No Ubuntu 24.04 e mais recente, o AppArmor pode bloquear a abertura do Electron pelo código-fonte ou arquivo portátil. Se ocorrer um erro de sandbox, instale o pacote `.deb`, que inclui um perfil AppArmor para este aplicativo. É possível criá-lo com `npm run build:linux` sem abrir o aplicativo pelo código-fonte primeiro. Consulte as [notas de lançamento do Ubuntu](https://documentation.ubuntu.com/release-notes/24.04/).
 
-Instale `python3-venv` se sua distribuição não fornecer suporte a ambientes virtuais do Python por padrão. A compilação inclui o backend Python e cria um instalador Debian `.deb` e arquivo portátil `.tar.gz` em `release/`. O computador de destino não precisa instalar Node.js ou Python separadamente. Abra o `.deb` no instalador de software, ou extraia o arquivo portátil e execute `claude-code-user-sync` como usuário normal. Use o [guia oficial do Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux) para instalar o Claude.
+A compilação inclui o backend Python e cria um instalador Debian `.deb` e arquivo portátil `.tar.gz` em `release/`. O computador de destino não precisa instalar Node.js ou Python separadamente. Abra o `.deb` no instalador de software, ou extraia o arquivo portátil e execute `claude-code-user-sync` como usuário normal. Use o [guia oficial do Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux) para instalar o Claude.
 
 ### Aplicativo sem instalador
 
@@ -190,7 +193,11 @@ Uma verificação separada no Windows 11 ARM64 usou um ZIP baixado diretamente d
 
 Na mesma VM Windows 11 ARM64, o aplicativo pelo código-fonte sincronizou uma conversa local de teste na aba Code entre duas contas inicializadas com login feito no Claude Desktop oficial MSIX 2.26454.0.0. Encerrou o Claude normalmente e o reabriu de forma automática. Depois, os dois catálogos de perfis continham a conversa; a cópia do backup e o catálogo gravado passaram nas verificações de hashes, não faltavam históricos e um plano posterior não tinha alterações pendentes. Repetir a sincronização não gravou arquivos do catálogo nem criou duplicatas. O instalador Windows empacotado e a compilação em um computador ARM64 continuam sem verificação.
 
-Os nove [jobs do GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) do repositório público passaram no commit `ca1a76e`: testes de Python 3.10/3.14, do fluxo Electron e das traduções, do backend incluído e de abertura do aplicativo empacotado no macOS, Windows e Linux. Também passaram as compilações do instalador e do arquivo portátil do Linux. Testes automatizados e de prévia não comprovam o funcionamento de todos os fluxos autenticados do Claude Desktop.
+Em uma VM Debian 13.7 ARM64 recém-instalada com LXDE, um ZIP público do GitHub no commit `641bac4` foi baixado sem credenciais e extraído em uma pasta com espaços. `bash ./setup.sh --check` informou Node.js/npm, suporte a ambientes virtuais do Python e curl ausentes sem alterar o código-fonte. A execução padrão de `bash ./setup.sh` instalou os requisitos, baixou e verificou o Node.js 22.23.3 ARM64 oficial e abriu o aplicativo pelo código-fonte com Python 3.13.5 e Electron 44.5.1. O encerramento normal do aplicativo e a verificação final dos requisitos terminaram com código de saída 0. A interface real selecionou inglês a partir da configuração regional `en_US` do sistema e mudou para português e espanhol.
+
+As verificações JavaScript no Linux tiveram 57 testes aprovados e uma omissão esperada; a suíte Python executou 200 testes com seis omissões esperadas e nenhuma falha. A verificação da prévia pelo código-fonte passou para os três idiomas e a seleção automática do idioma do sistema. A sincronização autenticada no Linux, a instalação nativa empacotada e a preparação pelo AppArmor no Ubuntu continuam sem verificação.
+
+Os nove [jobs do GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) do repositório público passaram no commit `641bac4`: testes de Python 3.10/3.14, do fluxo Electron e das traduções, do backend incluído e de abertura do aplicativo empacotado no macOS, Windows e Linux. Também passaram as compilações do instalador e do arquivo portátil do Linux. Testes automatizados e de prévia não comprovam o funcionamento de todos os fluxos autenticados do Claude Desktop.
 
 ## Arquitetura
 

@@ -180,15 +180,34 @@ unix('Linux setup validates supported distributions without executing release da
 });
 
 unix('Linux package preparation selects available time64 packages and installs only missing groups', t => {
-  const root = fixture(t);
-  const result = bash(root, `
-package_installed() { [[ "$1" != libgtk* && "$1" != libasound* ]]; }
-apt-cache() { case "$2" in libgtk-3-0t64|libasound2t64) printf 'Candidate: 1.0\\n' ;; *) printf 'Candidate: (none)\\n' ;; esac; }
+  for (const language of ['en', 'pt_BR', 'es']) {
+    const root = fixture(t);
+    const result = bash(root, `
+LANGUAGE=${quote(language)}
+export LANGUAGE
+unset LC_ALL
+package_installed() { [[ "$1" != binutils && "$1" != libgtk* && "$1" != libasound* ]]; }
+apt-cache() {
+  local label=Candidate missing='(none)'
+  if [[ \${LC_ALL:-} != C ]]; then
+    case "$LANGUAGE" in
+      pt_BR) label=Candidato; missing='(nenhum)' ;;
+      es) label=Candidato; missing='(ninguno)' ;;
+    esac
+  fi
+  case "$2" in
+    binutils|libgtk-3-0t64|libasound2t64) printf '%s: 1.0\\n' "$label" ;;
+    *) printf '%s: %s\\n' "$label" "$missing" ;;
+  esac
+}
 sudo() { printf 'sudo %s\\n' "$*" >> "$LOG"; }
 install_linux_packages
+printf '%s %s\\n' "$LANGUAGE" "\${LC_ALL-unset}" > "$SETUP_ROOT/locale-after.log"
 `);
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(fs.readFileSync(path.join(root, 'actions.log'), 'utf8'), 'sudo apt-get update\nsudo apt-get install -y -- libgtk-3-0t64 libasound2t64\n');
+    assert.equal(result.status, 0, `${language}: ${result.stderr}`);
+    assert.equal(fs.readFileSync(path.join(root, 'actions.log'), 'utf8'), 'sudo apt-get update\nsudo apt-get install -y -- binutils libgtk-3-0t64 libasound2t64\n');
+    assert.equal(fs.readFileSync(path.join(root, 'locale-after.log'), 'utf8'), `${language} unset\n`);
+  }
 });
 
 unix('headless Linux setup prepares without attempting to launch Electron', t => {

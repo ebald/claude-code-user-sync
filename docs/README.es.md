@@ -33,7 +33,7 @@ La herramienta no transfiere chats entre cuentas en la nube ni entre equipos, y 
 | macOS | Aplicación Electron para la arquitectura del Mac usado para compilar | Instalación empaquetada ARM64, tres idiomas, selección del idioma del sistema y sincronización real con copia de seguridad y reapertura de Claude verificadas localmente |
 | Windows 10/11 x64 | La misma interfaz Electron e instalador Windows x64 | La sincronización autenticada en un equipo Windows x64 nativo y el instalador empaquetado siguen sin verificar |
 | Windows 11 ARM64 | Node.js, Python y Electron x64 mediante la emulación de Windows; el instalador empaquetado sigue siendo x64 | Preparación desde el código fuente, sincronización de dos cuentas, copia de seguridad verificada y cierre/reapertura automáticos de Claude verificados en una VM; el instalador empaquetado y la compilación en un equipo ARM64 siguen sin verificar |
-| Linux | La misma interfaz Electron, con instalador Debian y archivo portátil para la arquitectura del equipo de compilación | Experimental; aún no se ha verificado la sincronización autenticada de Claude Desktop en un equipo Linux |
+| Linux | La misma interfaz Electron, con instalador Debian y archivo portátil para la arquitectura del equipo de compilación | Preparación desde el código fuente, tres idiomas y selección del idioma del sistema verificados en una VM Debian 13.7 ARM64 con LXDE; la sincronización autenticada y la instalación empaquetada siguen sin verificar |
 
 Windows 11 ARM64 usa la [emulación x64](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation) incluida en el sistema. Windows 10 ARM64 no es compatible. No se ofrece una compilación nativa de la aplicación para Windows ARM64.
 
@@ -64,7 +64,7 @@ Las aplicaciones empaquetadas ya incluyen Electron y Python. Los scripts de prep
 
 La instalación necesita conexión a Internet. El primer inicio puede terminar de descargar el runtime de Electron; mantén la conexión hasta que se abra la aplicación. Se reutilizan las versiones compatibles de Node.js, npm y Python que ya estén instaladas. La consola de preparación usa inglés; la aplicación abre en el idioma compatible de tu sistema y ofrece inglés, español y portugués.
 
-Si Node.js falta o es demasiado antiguo, el script de macOS/Linux descarga una distribución oficial verificada en `.sandbox/setup/`, una carpeta excluida de Git, y la usa para esta aplicación. En macOS, Python se instala mediante un paquete oficial firmado cuando hace falta. En Ubuntu/Debian, `apt` instala Python, soporte para entornos virtuales y bibliotecas de Electron que falten. La instalación de paquetes del sistema solicita permisos de administrador cuando los necesita; la aplicación se ejecuta como tu usuario habitual.
+Si Node.js falta o es demasiado antiguo, el script de macOS/Linux descarga una distribución oficial verificada en `.sandbox/setup/`, una carpeta excluida de Git, y la usa para esta aplicación. En macOS, Python se instala mediante un paquete oficial firmado cuando hace falta. En Ubuntu/Debian, `apt` instala Python, soporte para entornos virtuales, bibliotecas de Electron y `binutils` para empaquetar cuando falten. La instalación de paquetes del sistema solicita permisos de administrador cuando los necesita; la aplicación se ejecuta como tu usuario habitual.
 
 En Linux, cuando AppArmor restringe el inicio de Electron desde el código fuente, la preparación predeterminada compila e instala el paquete `.deb` y abre la aplicación instalada. La instalación puede pedir tu contraseña de administrador. Después de instalarla, puedes abrir la aplicación directamente desde el menú de aplicaciones en las siguientes ocasiones. Esto resuelve las restricciones usadas por Ubuntu 24.04 y versiones posteriores; `--check` indica cuándo hace falta esta forma de inicio sin hacer cambios.
 
@@ -227,7 +227,7 @@ En Windows, la comprobación de archivos admite archivos normales en unidades lo
 
 Usa Ubuntu 22.04 o posterior o Debian 12 o posterior, con una sesión gráfica x64 o arm64. Instala Claude Desktop siguiendo la [guía oficial de la beta Linux](https://code.claude.com/docs/en/desktop-linux) e inicializa conversaciones locales en Code para cada cuenta. Ejecuta la aplicación como tu usuario habitual.
 
-Instala Node.js 22.12 o posterior, npm y Python 3.10 o posterior. Para compilar en Ubuntu o Debian, instala también `python3-venv`. Desde la carpeta del proyecto:
+Instala Node.js 22.12 o posterior, npm y Python 3.10 o posterior. Para compilar en Ubuntu o Debian, instala también `python3-venv` y `binutils` (que incluye `objdump`); la preparación automática instala ambos. Desde la carpeta del proyecto:
 
 ```sh
 node --version
@@ -251,6 +251,7 @@ npm run preview
 Compila en un equipo Linux con Node.js y Python para la arquitectura de ese equipo. Usa la distribución compatible más antigua que quieras admitir (Ubuntu 22.04 es la base); los paquetes compilados en un sistema más reciente o con un Python más reciente pueden necesitar bibliotecas Linux más recientes.
 
 ```sh
+sudo apt install python3-venv binutils
 npm run build:linux
 ```
 
@@ -272,7 +273,7 @@ Si tus carpetas son distintas, selecciónalas en los ajustes o usa las opciones 
 python3 claude_sync.py --app-data "/ruta/Claude" --projects-dir "/ruta/.claude/projects" sync --live
 ```
 
-La sincronización en Linux es experimental. Las pruebas automatizadas y la vista previa no verifican la sincronización autenticada de Claude Desktop en un equipo Linux.
+La preparación desde el código fuente y la selección de idioma se verificaron en Debian 13.7 ARM64 con LXDE. La sincronización autenticada en Linux, la instalación nativa empaquetada y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
 
 ## Copias de seguridad y restauración
 
@@ -348,7 +349,7 @@ npm test
 python3 -m unittest discover
 ```
 
-En Windows, usa `npm.cmd test` y `py -3 -m unittest discover`. Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) del repositorio público pasaron para el commit `ca1a76e`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. La [guía de la aplicación](../desktop/README.es.md#pruebas-y-vista-previa) incluye los comandos de vista previa y empaquetado.
+En Windows, usa `npm.cmd test` y `py -3 -m unittest discover`. Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) del repositorio público pasaron para el commit `641bac4`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. La [guía de la aplicación](../desktop/README.es.md#pruebas-y-vista-previa) incluye los comandos de vista previa y empaquetado.
 
 La interfaz compartida usa **i18next** y diccionarios JSON en `desktop/locales/` para inglés, español y portugués brasileño. Las claves son iguales en macOS, Windows y Linux, y las pruebas comprueban su cobertura y las variables de interpolación. Por defecto, **Idioma del sistema** usa el idioma compatible preferido del sistema operativo. Las variantes regionales de inglés y español usan las traducciones correspondientes; todas las variantes de portugués usan portugués brasileño. Si ninguno de los idiomas preferidos tiene traducción, la aplicación usa inglés. Se guarda la elección manual entre aperturas; selecciona **Idioma del sistema** para volver a la selección automática.
 
@@ -365,6 +366,10 @@ La ejecución predeterminada de `.\setup.bat` también reutilizó las herramient
 Una comprobación independiente en Windows 11 ARM64 usó un ZIP descargado directamente del repositorio público sin credenciales, extraído en una carpeta con espacios. `setup.bat --check` informó de Node.js/npm ausentes y Python 3.14.8 x64 disponible; la ejecución predeterminada de `setup.bat` descargó y verificó Node.js 22.23.3 x64, instaló las dependencias npm fijadas y abrió la aplicación real en el idioma del sistema (inglés). La comprobación final `--check` pasó, al igual que la prueba de vista previa desde el código fuente para los tres idiomas, la selección automática del idioma del sistema, el estado de éxito traducido y el aislamiento del renderer. No se inició una sincronización durante esa comprobación de instalación; no se registró el código de salida de la preparación predeterminada.
 
 En la misma VM Windows 11 ARM64, la aplicación desde el código fuente sincronizó una conversación local de prueba en Code entre dos cuentas inicializadas con sesión iniciada en Claude Desktop oficial MSIX 2.26454.0.0. Cerró Claude normalmente y lo reabrió de forma automática. Después, ambos catálogos de perfiles contenían la conversación; la instantánea de la copia de seguridad y el catálogo escrito pasaron las comprobaciones de hashes, no faltaban historiales y un plan posterior no tenía cambios pendientes. Repetir la sincronización no escribió archivos del catálogo ni creó duplicados. El instalador Windows empaquetado y la compilación en un equipo ARM64 siguen sin verificar.
+
+En una VM Debian 13.7 ARM64 recién instalada con LXDE, se descargó un ZIP público de GitHub del commit `641bac4` sin credenciales y se extrajo en una carpeta con espacios. `bash ./setup.sh --check` informó de Node.js/npm, soporte de entornos virtuales de Python y curl ausentes sin modificar el código fuente. La ejecución predeterminada de `bash ./setup.sh` instaló los requisitos, descargó y verificó Node.js 22.23.3 ARM64 oficial y abrió la aplicación desde el código fuente con Python 3.13.5 y Electron 44.5.1. El cierre normal de la aplicación y la comprobación final de requisitos terminaron con código de salida 0. La interfaz real seleccionó inglés a partir de la configuración regional `en_US` del sistema y cambió a portugués y español.
+
+Las comprobaciones JavaScript en Linux tuvieron 57 pruebas aprobadas y una omisión prevista; la suite Python ejecutó 200 pruebas con seis omisiones previstas y ningún fallo. La comprobación de la vista previa desde el código fuente pasó para los tres idiomas y la selección automática del idioma del sistema. La sincronización autenticada en Linux, la instalación nativa empaquetada y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
 
 Para una comprobación adicional de lectura con la versión fija de Anthropic Agent SDK:
 

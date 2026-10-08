@@ -70,7 +70,7 @@ The account count comes from local account directories, rather than the number o
 
 Successful synchronization uses a success status. Unavailable files, histories or unresolved differences are stated specifically and can be reviewed in diagnostics. The file and backup controls open the saved result in your operating system’s file manager. If automatic Claude discovery fails, select the Claude application or executable through the app.
 
-Authenticated synchronization from source has been verified in a Windows 11 ARM64 VM using x64 emulation. Authenticated testing on a native Windows x64 host, the Windows packaged installer and the Linux workflow remain unverified.
+Authenticated synchronization from source has been verified in a Windows 11 ARM64 VM using x64 emulation. Authenticated testing on a native Windows x64 host, the Windows packaged installer and authenticated Linux synchronization remain unverified. Source setup and language selection have been verified on Debian 13.7 ARM64 with LXDE.
 
 ## Languages
 
@@ -138,13 +138,16 @@ The command bundles the backend and builds an NSIS installer in `release/`. The 
 
 On native Ubuntu 22.04+/Debian 12+, use x64 or arm64 Node.js and Python for the current computer. Build on the oldest supported distribution you intend to target (Ubuntu 22.04 is the baseline); packages built on a newer system or with a newer Python runtime may require newer Linux libraries.
 
+Linux packaging requires `python3-venv` and `binutils` (which provides `objdump`); automatic setup prepares both.
+
 ```sh
+sudo apt install python3-venv binutils
 npm run build:linux
 ```
 
 On Ubuntu 24.04 and newer, AppArmor may block Electron startup from source or from the portable archive. If startup fails with a sandbox error, install the `.deb` package, which includes an AppArmor profile for this app. You can create it with `npm run build:linux` without launching the source app first. See [Ubuntu’s release notes](https://documentation.ubuntu.com/release-notes/24.04/).
 
-Install `python3-venv` if your distribution does not provide Python’s virtual-environment support by default. The build includes the Python backend and creates a Debian `.deb` installer and portable `.tar.gz` archive in `release/`. The destination computer does not need Node.js or Python installed separately. Open the `.deb` with your software installer, or extract the portable archive and run `claude-code-user-sync` as your normal user. Use the official [Claude Desktop Linux beta guide](https://code.claude.com/docs/en/desktop-linux) to install Claude itself.
+The build includes the Python backend and creates a Debian `.deb` installer and portable `.tar.gz` archive in `release/`. The destination computer does not need Node.js or Python installed separately. Open the `.deb` with your software installer, or extract the portable archive and run `claude-code-user-sync` as your normal user. Use the official [Claude Desktop Linux beta guide](https://code.claude.com/docs/en/desktop-linux) to install Claude itself.
 
 ### Unpacked app
 
@@ -190,7 +193,11 @@ A separate Windows 11 ARM64 check used a ZIP downloaded directly from the public
 
 In the same Windows 11 ARM64 VM, the source app synchronized one harmless local Code conversation between two initialized signed-in accounts with official Claude Desktop MSIX 2.26454.0.0. It quit Claude normally and reopened it automatically. Both profile catalogs contained the conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, and a subsequent plan had no pending changes. Repeating synchronization wrote no catalog files and created no duplicates. The Windows packaged installer and packaging on an ARM64 host remain unverified.
 
-All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) in the public repository passed for commit `ca1a76e`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
+In a freshly installed Debian 13.7 ARM64 VM with LXDE, a public GitHub ZIP at commit `641bac4` was downloaded without credentials and extracted to a folder with spaces. `bash ./setup.sh --check` reported missing Node.js/npm, Python virtual-environment support and curl without changing the source. The default `bash ./setup.sh` installed the prerequisites, downloaded and verified official Node.js 22.23.3 ARM64 and opened the source app with Python 3.13.5 and Electron 44.5.1. Normal app closure and the final prerequisite check both returned exit status 0. The real interface selected English from the OS locale `en_US` and switched to Portuguese and Spanish.
+
+Linux JavaScript checks had 57 passes and one expected skip; the Python suite ran 200 tests with six expected skips and no failures. The source preview smoke check passed for all three languages and automatic OS language selection. Authenticated Linux synchronization, native packaged installation and the Ubuntu AppArmor setup route remain unverified.
+
+All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) in the public repository passed for commit `641bac4`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
 
 ## Architecture
 

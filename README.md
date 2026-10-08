@@ -34,7 +34,7 @@ This is a local utility. It does not transfer chats between cloud accounts or co
 | macOS | Electron app, built for the Mac's current architecture | ARM64 packaged installation, three languages, OS language selection and real synchronization with backup and Claude reopening verified locally |
 | Windows 10/11 x64 | The same Electron interface; Windows x64 installer | Authenticated synchronization on a native x64 Windows host and the packaged installer remain unverified |
 | Windows 11 ARM64 | x64 Node.js, Python and Electron through Windows emulation; packaged installer remains x64 | Source setup, two-account synchronization, verified backup and automatic Claude exit/reopening verified in a VM; packaged installer and ARM64-host packaging remain unverified |
-| Linux | The same Electron interface; Debian installer and portable archive for the build computer’s architecture | Experimental; authenticated Claude Desktop synchronization has not yet been verified on a Linux machine |
+| Linux | The same Electron interface; Debian installer and portable archive for the build computer’s architecture | Source setup, three languages and OS language selection verified in a Debian 13.7 ARM64 VM with LXDE; authenticated synchronization and packaged installation remain unverified |
 
 Windows 11 ARM64 uses the system’s built-in [x64 emulation](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation). Windows 10 ARM64 is unsupported. A native Windows ARM64 app build is not provided.
 
@@ -65,7 +65,7 @@ Packaged apps already include Electron and Python. The setup scripts are for run
 
 An internet connection is required for installation. The first launch may finish downloading the Electron runtime, so keep the connection available until the app opens. Compatible installed versions of Node.js, npm and Python are reused. The setup console uses English; the app opens in your system's supported language and offers English, Spanish and Portuguese.
 
-When Node.js is missing or too old, the macOS/Linux script downloads a verified official Node.js distribution into the ignored `.sandbox/setup/` folder and uses it for this app. Missing Python on macOS is installed from an official signed Python package. On Ubuntu/Debian, `apt` installs missing Python, virtual-environment support and Electron runtime libraries. System package installation requests administrator privileges when needed; the app runs as your normal user.
+When Node.js is missing or too old, the macOS/Linux script downloads a verified official Node.js distribution into the ignored `.sandbox/setup/` folder and uses it for this app. Missing Python on macOS is installed from an official signed Python package. On Ubuntu/Debian, `apt` installs missing Python, virtual-environment support, Electron runtime libraries and `binutils` for packaging. System package installation requests administrator privileges when needed; the app runs as your normal user.
 
 On Linux where AppArmor restricts Electron launches from source, default setup builds and installs the `.deb` package and opens the installed app instead. Installation may request your administrator password. After installation, open the app directly from your application menu on later launches. This handles the restrictions used by Ubuntu 24.04 and newer; `--check` reports when this packaged route is needed without changing anything.
 
@@ -232,7 +232,7 @@ Windows asset checks currently support ordinary files on local drives. Network s
 
 Use Ubuntu 22.04 or newer or Debian 12 or newer, with an x64 or arm64 desktop session. Install Claude Desktop using Anthropic’s [Linux beta installation guide](https://code.claude.com/docs/en/desktop-linux), then initialize local Code conversations in each account. Run the app as your normal desktop user.
 
-Install Node.js 22.12 or newer, npm and Python 3.10 or newer. For packaging on Ubuntu or Debian, also install the Python virtual-environment package, `python3-venv`. From the project folder:
+Install Node.js 22.12 or newer, npm and Python 3.10 or newer. For packaging on Ubuntu or Debian, also install `python3-venv` and `binutils` (which provides `objdump`); automatic setup prepares both. From the project folder:
 
 ```sh
 node --version
@@ -256,6 +256,7 @@ npm run preview
 Build on a Linux computer using Node.js and Python for that computer’s architecture. Build on the oldest supported distribution you intend to target (Ubuntu 22.04 is the baseline); packages built on a newer system or with a newer Python runtime may require newer Linux libraries.
 
 ```sh
+sudo apt install python3-venv binutils
 npm run build:linux
 ```
 
@@ -277,7 +278,7 @@ If the Claude data folder differs, select it in app settings, or use global CLI 
 python3 claude_sync.py --app-data "/path/to/Claude" --projects-dir "/path/to/.claude/projects" sync --live
 ```
 
-Linux synchronization is experimental. Automated tests and preview checks do not verify authenticated Claude Desktop synchronization on a Linux machine.
+Source setup and language selection have been verified on Debian 13.7 ARM64 with LXDE. Authenticated Linux synchronization, native packaged installation and the Ubuntu AppArmor setup route remain unverified.
 
 ## Backups and undo
 
@@ -393,7 +394,7 @@ npm test
 python3 -m unittest discover
 ```
 
-On Windows, use `py -3 -m unittest discover` for the Python suite. All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) in the public repository passed for commit `ca1a76e`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed.
+On Windows, use `py -3 -m unittest discover` for the Python suite. All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) in the public repository passed for commit `641bac4`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed.
 
 The desktop app uses **i18next** with English, Spanish and Brazilian Portuguese JSON dictionaries in `desktop/locales/`. One interface and the same translation keys serve macOS, Windows and Linux. Tests check language coverage and interpolation placeholders. The default **System language** setting uses the operating system’s preferred supported language. English and Spanish regional variants use their matching translations; all Portuguese variants use Brazilian Portuguese. If none of the preferred languages is supported, the app uses English. A manual language choice persists between launches; select **System language** to return to automatic selection.
 
@@ -410,6 +411,10 @@ A default `.\setup.bat` run also reused the runtimes, installed locked dependenc
 A separate Windows 11 ARM64 check used a ZIP downloaded directly from the public repository without credentials, extracted to a folder with spaces. `setup.bat --check` reported missing Node.js/npm and an available Python 3.14.8 x64; the default `setup.bat` run downloaded and verified Node.js 22.23.3 x64, installed the locked npm dependencies and opened the real app in the OS language (English). The final `--check` passed, and the source preview smoke check passed for all three languages, automatic OS language selection, the localized success status and renderer isolation. No synchronization was started during that installation check; the default setup's exit status was not recorded.
 
 In the same Windows 11 ARM64 VM, the source app synchronized one harmless local Code conversation between two initialized signed-in accounts with official Claude Desktop MSIX 2.26454.0.0. It quit Claude normally and reopened it automatically. Both profile catalogs contained the conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, and a subsequent plan had no pending changes. Repeating synchronization wrote no catalog files and created no duplicates. The Windows packaged installer and packaging on an ARM64 host remain unverified.
+
+In a freshly installed Debian 13.7 ARM64 VM with LXDE, a public GitHub ZIP at commit `641bac4` was downloaded without credentials and extracted to a folder with spaces. `bash ./setup.sh --check` reported missing Node.js/npm, Python virtual-environment support and curl without changing the source. The default `bash ./setup.sh` installed the prerequisites, downloaded and verified official Node.js 22.23.3 ARM64 and opened the source app with Python 3.13.5 and Electron 44.5.1. Normal app closure and the final prerequisite check both returned exit status 0. The real interface selected English from the OS locale `en_US` and switched to Portuguese and Spanish.
+
+Linux JavaScript checks had 57 passes and one expected skip; the Python suite ran 200 tests with six expected skips and no failures. The source preview smoke check passed for all three languages and automatic OS language selection. Authenticated Linux synchronization, native packaged installation and the Ubuntu AppArmor setup route remain unverified.
 
 For an additional read check with the pinned Anthropic Agent SDK:
 

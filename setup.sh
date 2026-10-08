@@ -136,7 +136,7 @@ package_installed() {
 }
 
 linux_package_groups() {
-  printf '%s\n' ca-certificates curl tar python3 python3-venv libnss3 libgbm1 libxss1 libx11-xcb1 libdrm2 libxcb-dri3-0 \
+  printf '%s\n' ca-certificates curl tar binutils python3 python3-venv libnss3 libgbm1 libxss1 libx11-xcb1 libdrm2 libxcb-dri3-0 \
     'libgtk-3-0t64|libgtk-3-0' 'libasound2t64|libasound2' 'libatk-bridge2.0-0t64|libatk-bridge2.0-0'
 }
 
@@ -168,7 +168,7 @@ install_linux_packages() {
     IFS='|' read -r -a candidates <<< "$group"
     candidate=''
     for package in "${candidates[@]}"; do
-      policy=$(apt-cache policy "$package" 2>/dev/null || true)
+      policy=$(LC_ALL=C apt-cache policy "$package" 2>/dev/null || true)
       if [[ "$policy" =~ Candidate:[[:space:]]+([^[:space:]]+) ]] && [[ ${BASH_REMATCH[1]} != '(none)' ]]; then
         candidate=$package; break
       fi

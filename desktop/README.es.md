@@ -70,7 +70,7 @@ La cantidad de cuentas procede de las carpetas locales de cuentas, en lugar del 
 
 Una sincronización correcta usa el estado de éxito. Los archivos o historiales no disponibles y las diferencias pendientes se indican específicamente y pueden consultarse en los diagnósticos. Los controles de archivos y copias de seguridad abren el resultado guardado en el explorador de archivos del sistema operativo. Si falla la localización automática de Claude, selecciona la aplicación o ejecutable de Claude mediante la interfaz.
 
-La sincronización autenticada desde el código fuente se verificó en una VM Windows 11 ARM64 mediante emulación x64. Las pruebas autenticadas en un equipo Windows x64 nativo, el instalador Windows empaquetado y el flujo en Linux siguen sin verificar.
+La sincronización autenticada desde el código fuente se verificó en una VM Windows 11 ARM64 mediante emulación x64. Las pruebas autenticadas en un equipo Windows x64 nativo, el instalador Windows empaquetado y la sincronización autenticada en Linux siguen sin verificar. La preparación desde el código fuente y la selección de idioma se verificaron en Debian 13.7 ARM64 con LXDE.
 
 ## Idiomas
 
@@ -138,13 +138,16 @@ El comando empaqueta el backend y genera un instalador NSIS en `release/`. La ap
 
 En Ubuntu 22.04+/Debian 12+ nativo, usa Node.js y Python x64 o arm64 correspondientes a la arquitectura del equipo. Compila en la distribución más antigua que quieras admitir (Ubuntu 22.04 es la referencia); los paquetes compilados en un sistema o Python más reciente pueden necesitar bibliotecas Linux más recientes.
 
+Para empaquetar en Linux se necesitan `python3-venv` y `binutils` (que incluye `objdump`); la preparación automática instala ambos.
+
 ```sh
+sudo apt install python3-venv binutils
 npm run build:linux
 ```
 
 En Ubuntu 24.04 y posteriores, AppArmor puede bloquear el inicio de Electron desde el código fuente o el archivo portátil. Si aparece un error de sandbox, instala el paquete `.deb`, que incluye un perfil AppArmor para esta aplicación. Puedes crearlo con `npm run build:linux` sin abrir primero la aplicación desde el código fuente. Consulta las [notas de lanzamiento de Ubuntu](https://documentation.ubuntu.com/release-notes/24.04/).
 
-Instala `python3-venv` si tu distribución no ofrece soporte de entornos virtuales de Python de forma predeterminada. La compilación incluye el backend Python y crea un instalador Debian `.deb` y archivo portátil `.tar.gz` en `release/`. El equipo de destino no necesita instalar Node.js ni Python aparte. Abre el `.deb` con el instalador de software, o extrae el archivo portátil y ejecuta `claude-code-user-sync` como usuario normal. Usa la [guía oficial de Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux) para instalar Claude.
+La compilación incluye el backend Python y crea un instalador Debian `.deb` y archivo portátil `.tar.gz` en `release/`. El equipo de destino no necesita instalar Node.js ni Python aparte. Abre el `.deb` con el instalador de software, o extrae el archivo portátil y ejecuta `claude-code-user-sync` como usuario normal. Usa la [guía oficial de Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux) para instalar Claude.
 
 ### Aplicación sin instalador
 
@@ -190,7 +193,11 @@ Una comprobación independiente en Windows 11 ARM64 usó un ZIP descargado direc
 
 En la misma VM Windows 11 ARM64, la aplicación desde el código fuente sincronizó una conversación local de prueba en Code entre dos cuentas inicializadas con sesión iniciada en Claude Desktop oficial MSIX 2.26454.0.0. Cerró Claude normalmente y lo reabrió de forma automática. Después, ambos catálogos de perfiles contenían la conversación; la instantánea de la copia de seguridad y el catálogo escrito pasaron las comprobaciones de hashes, no faltaban historiales y un plan posterior no tenía cambios pendientes. Repetir la sincronización no escribió archivos del catálogo ni creó duplicados. El instalador Windows empaquetado y la compilación en un equipo ARM64 siguen sin verificar.
 
-Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37639483821) del repositorio público pasaron para el commit `ca1a76e`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. Las pruebas automatizadas y de vista previa no demuestran que funcionen todos los flujos autenticados de Claude Desktop.
+En una VM Debian 13.7 ARM64 recién instalada con LXDE, se descargó un ZIP público de GitHub del commit `641bac4` sin credenciales y se extrajo en una carpeta con espacios. `bash ./setup.sh --check` informó de Node.js/npm, soporte de entornos virtuales de Python y curl ausentes sin modificar el código fuente. La ejecución predeterminada de `bash ./setup.sh` instaló los requisitos, descargó y verificó Node.js 22.23.3 ARM64 oficial y abrió la aplicación desde el código fuente con Python 3.13.5 y Electron 44.5.1. El cierre normal de la aplicación y la comprobación final de requisitos terminaron con código de salida 0. La interfaz real seleccionó inglés a partir de la configuración regional `en_US` del sistema y cambió a portugués y español.
+
+Las comprobaciones JavaScript en Linux tuvieron 57 pruebas aprobadas y una omisión prevista; la suite Python ejecutó 200 pruebas con seis omisiones previstas y ningún fallo. La comprobación de la vista previa desde el código fuente pasó para los tres idiomas y la selección automática del idioma del sistema. La sincronización autenticada en Linux, la instalación nativa empaquetada y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
+
+Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) del repositorio público pasaron para el commit `641bac4`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. Las pruebas automatizadas y de vista previa no demuestran que funcionen todos los flujos autenticados de Claude Desktop.
 
 ## Arquitectura
 
