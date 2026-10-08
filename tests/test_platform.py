@@ -195,6 +195,14 @@ class LinuxProcessTests(unittest.TestCase):
         with mock.patch.object(sync_platform, "linux_process_identity", side_effect=identity):
             return sync_platform.linux_process_state(run=mock.Mock(return_value=result), uid=self.uid)
 
+    def native_state(self, listing, executable=None):
+        executable = str(sync_platform.LINUX_CLAUDE_EXECUTABLE) if executable is None else executable
+        result = subprocess.CompletedProcess([], 0, listing, "")
+        with mock.patch.object(sync_platform.os, "readlink", return_value=executable), \
+                mock.patch.object(Path, "stat", return_value=types.SimpleNamespace(st_uid=self.uid)):
+            return sync_platform.linux_process_state(run=mock.Mock(return_value=result),
+                                                     proc_root=self.proc, uid=self.uid)
+
     def test_official_main_helpers_and_cli_have_distinct_roles(self):
         executable = str(sync_platform.LINUX_CLAUDE_EXECUTABLE)
         state = self.state("42 claude-desktop\n43 claude-desktop\n44 claude\n45 node\n46 bash\n", {
@@ -220,6 +228,75 @@ class LinuxProcessTests(unittest.TestCase):
                 state = self.state("42 claude-desktop\n", {42: (executable, *arguments)})
                 self.assertFalse(state.main)
                 self.assertTrue(state.any_claude)
+
+    def test_official_helper_with_rewritten_unterminated_title_is_running_but_not_main(self):
+        executable = str(sync_platform.LINUX_CLAUDE_EXECUTABLE)
+        self.process(42, executable, "/usr/bin/claude-desktop")
+        self.process(43, executable, executable)
+        # The authenticated Linux app rewrites some helper titles to 4096 bytes
+        # with no NUL terminator. Use synthetic bytes, never a real argv value.
+        (self.proc / "43/cmdline").write_bytes(b"x" * 4096)
+        state = self.native_state("42 claude-desktop\n43 claude-desktop\n")
+        self.assertEqual(state.desktop, frozenset({42, 43}))
+        self.assertEqual(state.main, frozenset({42}))
+        self.assertTrue(state.any_claude)
+
+        helper_only = self.native_state("43 claude-desktop\n")
+        self.assertEqual(helper_only.desktop, frozenset({43}))
+        self.assertFalse(helper_only.main)
+        self.assertTrue(helper_only.any_claude)
+
+        catalog = self.proc / "catalog"
+        catalog.mkdir()
+        closed = sync_platform.LinuxProcessState(frozenset(), frozenset(), False)
+        with mock.patch.multiple(sync, LIVE_ROOT=catalog, _PATHS_CONFIGURED=True), \
+                mock.patch.object(sync_platform, "platform_name", return_value="linux"), \
+                mock.patch.object(sync_platform, "linux_process_state", side_effect=[helper_only, closed]):
+            with self.assertRaisesRegex(RuntimeError, "Quit Claude completely"):
+                with sync.live_write_scope(catalog, [], live=True):
+                    self.fail("A rewritten helper must keep live writes blocked")
+            with sync.live_write_scope(catalog, [], live=True):
+                self.assertEqual(sync._LIVE_WRITE_PATHS, {catalog.resolve()})
+
+    def test_malformed_arguments_do_not_authorize_main_or_unknown_executables(self):
+        executable = str(sync_platform.LINUX_CLAUDE_EXECUTABLE)
+        self.process(42, executable, executable)
+        (self.proc / "42/cmdline").write_bytes(b"x" * 4096)
+        with mock.patch.object(sync_platform.os, "readlink", return_value=executable), \
+                mock.patch.object(Path, "stat", return_value=types.SimpleNamespace(st_uid=self.uid)):
+            with self.assertRaises(ValueError):
+                sync_platform.verified_linux_main(42, proc_root=self.proc, uid=self.uid)
+        for name in ("node", "nodejs", "claude"):
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "No live changes"):
+                self.native_state(f"42 {name}\n")
+        with self.assertRaisesRegex(RuntimeError, "No live changes"):
+            self.native_state("42 claude-desktop\n", executable="/tmp/claude-desktop")
+
+    def test_rewritten_title_fallback_rechecks_native_process_ownership(self):
+        self.process(42, "unused", "claude-desktop")
+        (self.proc / "42/cmdline").write_bytes(b"x" * 4096)
+        result = subprocess.CompletedProcess([], 0, "42 claude-desktop\n", "")
+        with mock.patch.object(sync_platform.os, "readlink",
+                               return_value=str(sync_platform.LINUX_CLAUDE_EXECUTABLE)), \
+                mock.patch.object(Path, "stat", side_effect=[types.SimpleNamespace(st_uid=self.uid),
+                                                            types.SimpleNamespace(st_uid=self.uid + 1)]):
+            with self.assertRaisesRegex(RuntimeError, "No live changes") as caught:
+                sync_platform.linux_process_state(run=mock.Mock(return_value=result),
+                                                   proc_root=self.proc, uid=self.uid)
+        self.assertIsInstance(caught.exception.__cause__, PermissionError)
+
+    def test_rewritten_helper_that_exits_before_executable_recheck_is_ignored(self):
+        self.process(42, "unused", "claude-desktop")
+        (self.proc / "42/cmdline").write_bytes(b"x" * 4096)
+        result = subprocess.CompletedProcess([], 0, "42 claude-desktop\n", "")
+        with mock.patch.object(sync_platform.os, "readlink",
+                               side_effect=[str(sync_platform.LINUX_CLAUDE_EXECUTABLE), FileNotFoundError()]), \
+                mock.patch.object(Path, "stat", return_value=types.SimpleNamespace(st_uid=self.uid)):
+            state = sync_platform.linux_process_state(run=mock.Mock(return_value=result),
+                                                       proc_root=self.proc, uid=self.uid)
+        self.assertFalse(state.desktop)
+        self.assertFalse(state.main)
+        self.assertFalse(state.any_claude)
 
     def test_exited_candidates_are_ignored_but_unreadable_candidates_block(self):
         self.assertFalse(self.state("42 claude-desktop\n", {42: FileNotFoundError()}).any_claude)
@@ -259,9 +336,11 @@ class LinuxProcessTests(unittest.TestCase):
             executable, arguments = sync_platform.linux_process_identity(42, proc_root=self.proc, uid=self.uid)
             self.assertEqual(executable, sync_platform.LINUX_CLAUDE_EXECUTABLE)
             self.assertEqual(arguments, [b"claude-desktop", b"path with spaces", b"--type=renderer"])
-            (root / "cmdline").write_bytes(b"missing terminator")
-            with self.assertRaises(ValueError):
-                sync_platform.linux_process_identity(42, proc_root=self.proc, uid=self.uid)
+            for invalid in (b"", b"missing terminator", b"x" * 4096, b"x" * 65_536 + b"\0"):
+                with self.subTest(size=len(invalid)):
+                    (root / "cmdline").write_bytes(invalid)
+                    with self.assertRaises(ValueError):
+                        sync_platform.linux_process_identity(42, proc_root=self.proc, uid=self.uid)
         with mock.patch.object(Path, "stat", return_value=types.SimpleNamespace(st_uid=self.uid + 1)):
             with self.assertRaises(PermissionError):
                 sync_platform.linux_process_identity(42, proc_root=self.proc, uid=self.uid)

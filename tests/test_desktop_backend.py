@@ -257,7 +257,7 @@ class BackendTests(unittest.TestCase):
         kill.assert_not_called()
 
     def test_linux_unverified_or_unsupported_shutdown_asks_for_manual_quit(self):
-        for verification in (False, PermissionError("private path")):
+        for verification in (False, PermissionError("private path"), ValueError("Invalid process arguments")):
             with self.subTest(verification=verification), \
                     mock.patch.object(backend.os, "pidfd_open", return_value=123, create=True), \
                     mock.patch.object(backend.signal, "pidfd_send_signal", create=True) as send, \
@@ -308,12 +308,15 @@ class BackendTests(unittest.TestCase):
     def test_linux_close_requests_verified_main_quit_then_waits_for_all_claude_processes(self):
         self.driver.platform = "linux"
         processes = backend.sync_platform.LinuxProcessState(frozenset({42, 43}), frozenset({42}), True)
+        helper_only = backend.sync_platform.LinuxProcessState(frozenset({43}), frozenset(), True)
         closed = backend.sync_platform.LinuxProcessState(frozenset(), frozenset(), False)
-        with mock.patch.object(backend, "linux_process_state", side_effect=[processes, processes, closed]), \
+        with mock.patch.object(backend, "linux_process_state", side_effect=[processes, helper_only, closed]) as check, \
                 mock.patch.object(backend, "request_linux_shutdown") as request, \
-                mock.patch.object(backend.time, "sleep"):
+                mock.patch.object(backend.time, "sleep") as wait:
             self.assertEqual(self.driver.close(), {"closed": True})
         request.assert_called_once_with(frozenset({42}))
+        self.assertEqual(check.call_count, 3)
+        wait.assert_called_once()
 
     def test_linux_cli_or_nonstandard_desktop_requires_manual_quit_without_writes(self):
         self.driver.platform = "linux"
@@ -342,7 +345,7 @@ class BackendTests(unittest.TestCase):
     def test_linux_reopen_runs_only_selected_launcher_and_confirms_desktop_under_lock(self):
         self.driver.platform = "linux"
         closed = backend.sync_platform.LinuxProcessState(frozenset(), frozenset(), False)
-        opened = backend.sync_platform.LinuxProcessState(frozenset({42}), frozenset({42}), True)
+        opened = backend.sync_platform.LinuxProcessState(frozenset({42}), frozenset(), True)
         with mock.patch.object(self.driver, "launch_target", return_value=("exe", "/usr/bin/claude-desktop")), \
                 mock.patch.object(claude_sync, "sync_lock", return_value=contextlib.nullcontext()), \
                 mock.patch.object(backend.subprocess, "Popen") as launch, \

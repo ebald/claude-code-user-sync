@@ -103,27 +103,37 @@ class LinuxProcessState:
     any_claude: bool
 
 
-def linux_process_identity(pid, *, proc_root=Path("/proc"), uid=None):
-    """Read native executable identity and NUL-separated arguments without a shell."""
+def linux_process_executable(pid, *, proc_root=Path("/proc"), uid=None):
+    """Read native executable identity only after confirming process ownership."""
     uid = os.getuid() if uid is None else uid
     root = Path(proc_root) / str(pid)
     if root.stat().st_uid != uid:
         raise PermissionError("Process belongs to another user")
-    executable = os.readlink(root / "exe").removesuffix(" (deleted)")
+    return Path(os.readlink(root / "exe").removesuffix(" (deleted)"))
+
+
+def linux_process_identity(pid, *, proc_root=Path("/proc"), uid=None):
+    """Read native executable identity and NUL-separated arguments without a shell."""
+    executable = linux_process_executable(pid, proc_root=proc_root, uid=uid)
+    root = Path(proc_root) / str(pid)
     with (root / "cmdline").open("rb") as handle:
         command = handle.read(65_537)
     if not command or len(command) > 65_536 or not command.endswith(b"\0"):
         raise ValueError("Invalid process arguments")
-    return Path(executable), command[:-1].split(b"\0")
+    return executable, command[:-1].split(b"\0")
+
+
+def _linux_main_identity(executable, arguments, expected_executable):
+    return (executable == expected_executable and bool(arguments[0])
+            and Path(os.fsdecode(arguments[0])).name == "claude-desktop"
+            and not any(argument == b"--type" or argument.startswith(b"--type=")
+                        for argument in arguments[1:]))
 
 
 def verified_linux_main(pid, *, proc_root=Path("/proc"), uid=None,
                         expected_executable=LINUX_CLAUDE_EXECUTABLE):
     executable, arguments = linux_process_identity(pid, proc_root=proc_root, uid=uid)
-    return (executable == expected_executable and bool(arguments[0])
-            and Path(os.fsdecode(arguments[0])).name == "claude-desktop"
-            and not any(argument == b"--type" or argument.startswith(b"--type=")
-                        for argument in arguments[1:]))
+    return _linux_main_identity(executable, arguments, expected_executable)
 
 
 def linux_process_state(*, run=None, timeout=30, proc_root=Path("/proc"), uid=None,
@@ -149,6 +159,21 @@ def linux_process_state(*, run=None, timeout=30, proc_root=Path("/proc"), uid=No
             except FileNotFoundError:
                 # A process that exited after the snapshot cannot write catalogs.
                 continue
+            except ValueError:
+                # Electron helpers can replace argv with an unterminated process
+                # title. Count a verified official executable as running, but
+                # never authorize an unparseable command line for shutdown.
+                if name != "claude-desktop":
+                    raise
+                try:
+                    executable = linux_process_executable(pid, proc_root=proc_root, uid=uid)
+                except FileNotFoundError:
+                    continue
+                if executable != expected_executable:
+                    raise
+                desktop.add(pid)
+                any_claude = True
+                continue
             if name in ("node", "nodejs"):
                 if any(b"/@anthropic-ai/claude-code/" in argument
                        or Path(os.fsdecode(argument)).name == "claude"
@@ -158,8 +183,7 @@ def linux_process_state(*, run=None, timeout=30, proc_root=Path("/proc"), uid=No
             any_claude = True
             if name == "claude-desktop" or executable.name == "claude-desktop":
                 desktop.add(pid)
-                if verified_linux_main(pid, proc_root=proc_root, uid=uid,
-                                       expected_executable=expected_executable):
+                if _linux_main_identity(executable, arguments, expected_executable):
                     main.add(pid)
         return LinuxProcessState(frozenset(desktop), frozenset(main), any_claude)
     except (OSError, subprocess.SubprocessError, UnicodeError, ValueError) as error:
