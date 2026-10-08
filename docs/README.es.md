@@ -33,7 +33,7 @@ La herramienta no transfiere chats entre cuentas en la nube ni entre equipos, y 
 | macOS | Aplicación Electron para la arquitectura del Mac usado para compilar | Instalación empaquetada ARM64, tres idiomas, selección del idioma del sistema y sincronización real con copia de seguridad y reapertura de Claude verificadas localmente |
 | Windows 10/11 x64 | La misma interfaz Electron e instalador Windows x64 | La sincronización autenticada en un equipo Windows x64 nativo y el instalador empaquetado siguen sin verificar |
 | Windows 11 ARM64 | Node.js, Python y Electron x64 mediante la emulación de Windows; el instalador empaquetado sigue siendo x64 | Preparación desde el código fuente, sincronización de dos cuentas, copia de seguridad verificada y cierre/reapertura automáticos de Claude verificados en una VM; el instalador empaquetado y la compilación en un equipo ARM64 siguen sin verificar |
-| Linux | La misma interfaz Electron, con instalador Debian y archivo portátil para la arquitectura del equipo de compilación | Preparación desde el código fuente, tres idiomas, selección del idioma del sistema, sincronización de dos cuentas, copia de seguridad verificada y cierre/reapertura automáticos de Claude verificados en una VM Debian 13.7 ARM64 con LXDE; la instalación empaquetada y otras distribuciones o versiones de Linux siguen sin verificar |
+| Linux | La misma interfaz Electron, con instalador Debian y archivo portátil para la arquitectura del equipo de compilación | Preparación desde el código fuente, tres idiomas, selección del idioma del sistema, sincronización de dos cuentas, copia de seguridad verificada, sincronización repetida sin escrituras del catálogo, compilaciones nativas ARM64 y cierre/reapertura automáticos de Claude verificados en una VM Debian 13.7 ARM64 con LXDE; la instalación empaquetada y otras distribuciones o versiones de Linux siguen sin verificar |
 
 Windows 11 ARM64 usa la [emulación x64](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation) incluida en el sistema. Windows 10 ARM64 no es compatible. No se ofrece una compilación nativa de la aplicación para Windows ARM64.
 
@@ -257,6 +257,14 @@ npm run build:linux
 
 La compilación incluye el motor Python y genera un **instalador Debian `.deb`** y un **archivo portátil `.tar.gz`** en `release/`. Abre el `.deb` con el instalador de programas de tu distribución, o extrae el archivo portátil y ejecuta `claude-code-user-sync` como tu usuario habitual. Los paquetes incluyen Electron, Python, sincronizador y traducciones. Usa `npm run pack` para generar la aplicación sin instalador.
 
+Desde la carpeta del proyecto, también puedes instalar el `.deb` en un terminal si no hay un instalador de software:
+
+```sh
+sudo apt install './release/claude-code-user-sync_1.3.0_arm64.deb'
+```
+
+Este nombre de archivo es un ejemplo para la versión 1.3.0 en ARM64. Sustitúyelo por el nombre real del `.deb` para tu versión y arquitectura; después abre **Claude Code User Sync** desde el menú de aplicaciones.
+
 ### Terminal y carpetas de datos en Linux
 
 Cierra Claude Desktop por completo y termina los terminales activos de Claude Code, después ejecuta:
@@ -273,7 +281,7 @@ Si tus carpetas son distintas, selecciónalas en los ajustes o usa las opciones 
 python3 claude_sync.py --app-data "/ruta/Claude" --projects-dir "/ruta/.claude/projects" sync --live
 ```
 
-La preparación desde el código fuente, la selección de idioma y la sincronización autenticada entre dos cuentas se verificaron en Debian 13.7 ARM64 con LXDE. La sincronización autenticada en otras distribuciones o versiones de Linux, la instalación nativa empaquetada y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
+La preparación desde el código fuente, la selección de idioma, la sincronización autenticada entre dos cuentas, una sincronización repetida sin escrituras del catálogo y las compilaciones nativas ARM64 se verificaron en Debian 13.7 ARM64 con LXDE. La sincronización autenticada en otras distribuciones o versiones de Linux, la instalación nativa empaquetada y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
 
 ## Copias de seguridad y restauración
 
@@ -349,7 +357,7 @@ npm test
 python3 -m unittest discover
 ```
 
-En Windows, usa `npm.cmd test` y `py -3 -m unittest discover`. Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) del repositorio público pasaron para el commit `641bac4`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. La [guía de la aplicación](../desktop/README.es.md#pruebas-y-vista-previa) incluye los comandos de vista previa y empaquetado.
+En Windows, usa `npm.cmd test` y `py -3 -m unittest discover`. Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37709530312) del repositorio público pasaron para el commit `697bd1a`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. La [guía de la aplicación](../desktop/README.es.md#pruebas-y-vista-previa) incluye los comandos de vista previa y empaquetado.
 
 La interfaz compartida usa **i18next** y diccionarios JSON en `desktop/locales/` para inglés, español y portugués brasileño. Las claves son iguales en macOS, Windows y Linux, y las pruebas comprueban su cobertura y las variables de interpolación. Por defecto, **Idioma del sistema** usa el idioma compatible preferido del sistema operativo. Las variantes regionales de inglés y español usan las traducciones correspondientes; todas las variantes de portugués usan portugués brasileño. Si ninguno de los idiomas preferidos tiene traducción, la aplicación usa inglés. Se guarda la elección manual entre aperturas; selecciona **Idioma del sistema** para volver a la selección automática.
 
@@ -369,9 +377,15 @@ En la misma VM Windows 11 ARM64, la aplicación desde el código fuente sincroni
 
 En una VM Debian 13.7 ARM64 recién instalada con LXDE, se descargó un ZIP público de GitHub del commit `641bac4` sin credenciales y se extrajo en una carpeta con espacios. `bash ./setup.sh --check` informó de Node.js/npm, soporte de entornos virtuales de Python y curl ausentes sin modificar el código fuente. La ejecución predeterminada de `bash ./setup.sh` instaló los requisitos, descargó y verificó Node.js 22.23.3 ARM64 oficial y abrió la aplicación desde el código fuente con Python 3.13.5 y Electron 44.5.1. El cierre normal de la aplicación y la comprobación final de requisitos terminaron con código de salida 0. La interfaz real seleccionó inglés a partir de la configuración regional `en_US` del sistema y cambió a portugués y español. La elección manual del español se mantuvo tras reiniciar la VM.
 
-Las comprobaciones JavaScript en Linux tuvieron 57 pruebas aprobadas y una omisión prevista; la suite Python ejecutó 200 pruebas con seis omisiones previstas y ningún fallo. La comprobación de la vista previa desde el código fuente pasó para los tres idiomas y la selección automática del idioma del sistema.
+Se descargó un segundo ZIP público del commit `697bd1a` sin credenciales. La preparación predeterminada actualizada instaló `binutils`, verificó Node.js 22.23.3 ARM64 oficial y abrió la aplicación desde el código fuente como usuario habitual del escritorio. El cierre normal de la aplicación y la comprobación final de requisitos terminaron con código de salida 0.
 
-En la misma VM Debian, la aplicación desde el código fuente sincronizó una conversación local nativa de Code entre dos cuentas inicializadas con sesión iniciada en Claude Desktop oficial 2.26454.2 ARM64. Iniciar la sincronización desde la aplicación mientras Claude estaba abierto cerró Claude normalmente y lo reabrió de forma automática conservando la sesión iniciada. Después, ambos catálogos de perfiles contenían la única conversación; la instantánea de la copia de seguridad y el catálogo escrito pasaron las comprobaciones de hashes, no faltaban historiales, no había conflictos y un plan posterior no tenía cambios pendientes. La comprobación no encontró cambios inesperados en los historiales o archivos de las conversaciones nativas ni escrituras fuera del alcance permitido de la sincronización. La instalación nativa empaquetada, la sincronización autenticada en otras distribuciones o versiones de Linux y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
+Las comprobaciones JavaScript en Linux tuvieron 57 pruebas aprobadas y una omisión prevista; la suite Python actualizada ejecutó 204 pruebas con seis omisiones previstas y ningún fallo. La comprobación de la vista previa desde el código fuente pasó para los tres idiomas y la selección automática del idioma del sistema.
+
+En la misma VM Debian, la aplicación desde el código fuente sincronizó una conversación local nativa de Code entre dos cuentas inicializadas con sesión iniciada en Claude Desktop oficial 2.26454.2 ARM64. Iniciar la sincronización desde la aplicación mientras Claude estaba abierto cerró Claude normalmente y lo reabrió de forma automática conservando la sesión iniciada. Después, ambos catálogos de perfiles contenían la única conversación; la instantánea de la copia de seguridad y el catálogo escrito pasaron las comprobaciones de hashes, no faltaban historiales, no había conflictos y un plan posterior no tenía cambios pendientes. La comprobación no encontró cambios inesperados en los historiales o archivos de las conversaciones nativas ni escrituras fuera del alcance permitido de la sincronización.
+
+Una sincronización real repetida con el código fuente público corregido, mientras Claude estaba abierto, también cerró Claude normalmente y lo reabrió conservando la sesión iniciada. No escribió archivos del catálogo, las instantáneas de las copias de seguridad de ambos perfiles pasaron las comprobaciones de hashes y no se encontraron conversaciones duplicadas, historiales ausentes, conflictos, cambios pendientes ni cambios inesperados en archivos nativos.
+
+Una compilación nativa ARM64 generó correctamente el instalador Debian y el archivo portátil de la versión 1.3.0. La instalación nativa empaquetada, la sincronización autenticada en otras distribuciones o versiones de Linux y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
 
 Para una comprobación adicional de lectura con la versión fija de Anthropic Agent SDK:
 

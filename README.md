@@ -34,7 +34,7 @@ This is a local utility. It does not transfer chats between cloud accounts or co
 | macOS | Electron app, built for the Mac's current architecture | ARM64 packaged installation, three languages, OS language selection and real synchronization with backup and Claude reopening verified locally |
 | Windows 10/11 x64 | The same Electron interface; Windows x64 installer | Authenticated synchronization on a native x64 Windows host and the packaged installer remain unverified |
 | Windows 11 ARM64 | x64 Node.js, Python and Electron through Windows emulation; packaged installer remains x64 | Source setup, two-account synchronization, verified backup and automatic Claude exit/reopening verified in a VM; packaged installer and ARM64-host packaging remain unverified |
-| Linux | The same Electron interface; Debian installer and portable archive for the build computer’s architecture | Source setup, three languages, OS language selection, two-account synchronization, verified backup and automatic Claude exit/reopening verified in a Debian 13.7 ARM64 VM with LXDE; packaged installation and other Linux distributions or versions remain unverified |
+| Linux | The same Electron interface; Debian installer and portable archive for the build computer’s architecture | Source setup, three languages, OS language selection, two-account synchronization, verified backup, repeated sync without catalog writes, native ARM64 package builds and automatic Claude exit/reopening verified in a Debian 13.7 ARM64 VM with LXDE; packaged installation and other Linux distributions or versions remain unverified |
 
 Windows 11 ARM64 uses the system’s built-in [x64 emulation](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation). Windows 10 ARM64 is unsupported. A native Windows ARM64 app build is not provided.
 
@@ -262,6 +262,14 @@ npm run build:linux
 
 The build bundles the Python synchronization engine and creates a **Debian `.deb` installer** and a **portable `.tar.gz` archive** in `release/`. Open the `.deb` using your distribution’s software installer, or extract the portable archive and run its `claude-code-user-sync` executable as your normal user. Installed packages include Electron, Python, the backend and translations. Use `npm run pack` for an unpacked app directory.
 
+From the project folder, you can also install the `.deb` in a terminal if a software installer is unavailable:
+
+```sh
+sudo apt install './release/claude-code-user-sync_1.3.0_arm64.deb'
+```
+
+This filename is an example for version 1.3.0 on ARM64. Replace it with the actual `.deb` filename for your version and architecture, then open **Claude Code User Sync** from the applications menu.
+
 ### Linux terminal and data locations
 
 Quit Claude Desktop completely and finish active Claude Code terminals, then run:
@@ -278,7 +286,7 @@ If the Claude data folder differs, select it in app settings, or use global CLI 
 python3 claude_sync.py --app-data "/path/to/Claude" --projects-dir "/path/to/.claude/projects" sync --live
 ```
 
-Source setup, language selection and authenticated synchronization between two accounts have been verified on Debian 13.7 ARM64 with LXDE. Authenticated synchronization on other Linux distributions or versions, native packaged installation and the Ubuntu AppArmor setup route remain unverified.
+Source setup, language selection, authenticated synchronization between two accounts, a repeated sync without catalog writes and native ARM64 package builds have been verified on Debian 13.7 ARM64 with LXDE. Authenticated synchronization on other Linux distributions or versions, native packaged installation and the Ubuntu AppArmor setup route remain unverified.
 
 ## Backups and undo
 
@@ -394,7 +402,7 @@ npm test
 python3 -m unittest discover
 ```
 
-On Windows, use `py -3 -m unittest discover` for the Python suite. All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) in the public repository passed for commit `641bac4`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed.
+On Windows, use `py -3 -m unittest discover` for the Python suite. All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37709530312) in the public repository passed for commit `697bd1a`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed.
 
 The desktop app uses **i18next** with English, Spanish and Brazilian Portuguese JSON dictionaries in `desktop/locales/`. One interface and the same translation keys serve macOS, Windows and Linux. Tests check language coverage and interpolation placeholders. The default **System language** setting uses the operating system’s preferred supported language. English and Spanish regional variants use their matching translations; all Portuguese variants use Brazilian Portuguese. If none of the preferred languages is supported, the app uses English. A manual language choice persists between launches; select **System language** to return to automatic selection.
 
@@ -414,9 +422,15 @@ In the same Windows 11 ARM64 VM, the source app synchronized one harmless local 
 
 In a freshly installed Debian 13.7 ARM64 VM with LXDE, a public GitHub ZIP at commit `641bac4` was downloaded without credentials and extracted to a folder with spaces. `bash ./setup.sh --check` reported missing Node.js/npm, Python virtual-environment support and curl without changing the source. The default `bash ./setup.sh` installed the prerequisites, downloaded and verified official Node.js 22.23.3 ARM64 and opened the source app with Python 3.13.5 and Electron 44.5.1. Normal app closure and the final prerequisite check both returned exit status 0. The real interface selected English from the OS locale `en_US` and switched to Portuguese and Spanish. The manual Spanish choice persisted across a VM reboot.
 
-Linux JavaScript checks had 57 passes and one expected skip; the Python suite ran 200 tests with six expected skips and no failures. The source preview smoke check passed for all three languages and automatic OS language selection.
+A second public ZIP at commit `697bd1a` was downloaded without credentials. The updated default setup installed `binutils`, verified official Node.js 22.23.3 ARM64 and opened the source app as the normal desktop user. Normal app closure and the final prerequisite check returned exit status 0.
 
-In the same Debian VM, the source app synchronized one native local Code conversation between two initialized signed-in accounts with official Claude Desktop 2.26454.2 ARM64. Starting synchronization from the app while Claude was running closed Claude normally and reopened it automatically with login retained. Both profile catalogs contained the single conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, no conflicts remained and a subsequent plan had no pending changes. The check found no unexpected changes to native conversation histories or files and no writes outside the allowed synchronization scope. Native packaged installation, authenticated synchronization on other Linux distributions or versions and the Ubuntu AppArmor setup route remain unverified.
+Linux JavaScript checks had 57 passes and one expected skip; the updated Python suite ran 204 tests with six expected skips and no failures. The source preview smoke check passed for all three languages and automatic OS language selection.
+
+In the same Debian VM, the source app synchronized one native local Code conversation between two initialized signed-in accounts with official Claude Desktop 2.26454.2 ARM64. Starting synchronization from the app while Claude was running closed Claude normally and reopened it automatically with login retained. Both profile catalogs contained the single conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, no conflicts remained and a subsequent plan had no pending changes. The check found no unexpected changes to native conversation histories or files and no writes outside the allowed synchronization scope.
+
+A repeated real synchronization using the corrected public source, with Claude running, also closed Claude normally and reopened it with login retained. It wrote no catalog files, both profile backup snapshots passed hash checks and no duplicate conversations, missing transcripts, conflicts, pending changes or unexpected native file changes were found.
+
+A native ARM64 build produced the version 1.3.0 Debian installer and portable archive successfully. Native packaged installation, authenticated synchronization on other Linux distributions or versions and the Ubuntu AppArmor setup route remain unverified.
 
 For an additional read check with the pinned Anthropic Agent SDK:
 

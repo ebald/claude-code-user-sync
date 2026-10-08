@@ -70,7 +70,7 @@ The account count comes from local account directories, rather than the number o
 
 Successful synchronization uses a success status. Unavailable files, histories or unresolved differences are stated specifically and can be reviewed in diagnostics. The file and backup controls open the saved result in your operating system’s file manager. If automatic Claude discovery fails, select the Claude application or executable through the app.
 
-Authenticated synchronization from source has been verified in a Windows 11 ARM64 VM using x64 emulation and in a Debian 13.7 ARM64 VM with LXDE. Source setup and language selection have also been verified in the Debian VM. Authenticated testing on a native Windows x64 host or other Linux distributions or versions, the Windows packaged installer, native Linux packaged installation and the Ubuntu AppArmor setup route remain unverified.
+Authenticated synchronization from source has been verified in a Windows 11 ARM64 VM using x64 emulation and in a Debian 13.7 ARM64 VM with LXDE. Source setup, language selection, a repeated sync without catalog writes and native ARM64 package builds have also been verified in the Debian VM. Authenticated testing on a native Windows x64 host or other Linux distributions or versions, the Windows packaged installer, native Linux packaged installation and the Ubuntu AppArmor setup route remain unverified.
 
 ## Languages
 
@@ -149,6 +149,14 @@ On Ubuntu 24.04 and newer, AppArmor may block Electron startup from source or fr
 
 The build includes the Python backend and creates a Debian `.deb` installer and portable `.tar.gz` archive in `release/`. The destination computer does not need Node.js or Python installed separately. Open the `.deb` with your software installer, or extract the portable archive and run `claude-code-user-sync` as your normal user. Use the official [Claude Desktop Linux beta guide](https://code.claude.com/docs/en/desktop-linux) to install Claude itself.
 
+From the project folder, you can also install the `.deb` in a terminal if a software installer is unavailable:
+
+```sh
+sudo apt install './release/claude-code-user-sync_1.3.0_arm64.deb'
+```
+
+This filename is an example for version 1.3.0 on ARM64. Replace it with the actual `.deb` filename for your version and architecture, then open **Claude Code User Sync** from the applications menu.
+
 ### Unpacked app
 
 On any target platform:
@@ -195,11 +203,17 @@ In the same Windows 11 ARM64 VM, the source app synchronized one harmless local 
 
 In a freshly installed Debian 13.7 ARM64 VM with LXDE, a public GitHub ZIP at commit `641bac4` was downloaded without credentials and extracted to a folder with spaces. `bash ./setup.sh --check` reported missing Node.js/npm, Python virtual-environment support and curl without changing the source. The default `bash ./setup.sh` installed the prerequisites, downloaded and verified official Node.js 22.23.3 ARM64 and opened the source app with Python 3.13.5 and Electron 44.5.1. Normal app closure and the final prerequisite check both returned exit status 0. The real interface selected English from the OS locale `en_US` and switched to Portuguese and Spanish. The manual Spanish choice persisted across a VM reboot.
 
-Linux JavaScript checks had 57 passes and one expected skip; the Python suite ran 200 tests with six expected skips and no failures. The source preview smoke check passed for all three languages and automatic OS language selection.
+A second public ZIP at commit `697bd1a` was downloaded without credentials. The updated default setup installed `binutils`, verified official Node.js 22.23.3 ARM64 and opened the source app as the normal desktop user. Normal app closure and the final prerequisite check returned exit status 0.
 
-In the same Debian VM, the source app synchronized one native local Code conversation between two initialized signed-in accounts with official Claude Desktop 2.26454.2 ARM64. Starting synchronization from the app while Claude was running closed Claude normally and reopened it automatically with login retained. Both profile catalogs contained the single conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, no conflicts remained and a subsequent plan had no pending changes. The check found no unexpected changes to native conversation histories or files and no writes outside the allowed synchronization scope. Native packaged installation, authenticated synchronization on other Linux distributions or versions and the Ubuntu AppArmor setup route remain unverified.
+Linux JavaScript checks had 57 passes and one expected skip; the updated Python suite ran 204 tests with six expected skips and no failures. The source preview smoke check passed for all three languages and automatic OS language selection.
 
-All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) in the public repository passed for commit `641bac4`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
+In the same Debian VM, the source app synchronized one native local Code conversation between two initialized signed-in accounts with official Claude Desktop 2.26454.2 ARM64. Starting synchronization from the app while Claude was running closed Claude normally and reopened it automatically with login retained. Both profile catalogs contained the single conversation afterward; the backup snapshot and written catalog passed hash checks, no transcripts were missing, no conflicts remained and a subsequent plan had no pending changes. The check found no unexpected changes to native conversation histories or files and no writes outside the allowed synchronization scope.
+
+A repeated real synchronization using the corrected public source, with Claude running, also closed Claude normally and reopened it with login retained. It wrote no catalog files, both profile backup snapshots passed hash checks and no duplicate conversations, missing transcripts, conflicts, pending changes or unexpected native file changes were found.
+
+A native ARM64 build produced the version 1.3.0 Debian installer and portable archive successfully. Native packaged installation, authenticated synchronization on other Linux distributions or versions and the Ubuntu AppArmor setup route remain unverified.
+
+All nine [GitHub Actions jobs](https://github.com/ebald/claude-code-user-sync/actions/runs/37709530312) in the public repository passed for commit `697bd1a`: Python 3.10/3.14 tests, Electron workflow and translation tests, bundled-backend checks and packaged-app smoke checks on macOS, Windows and Linux. Linux installer and portable archive builds also passed. Automated and preview checks do not establish that every authenticated Claude Desktop workflow works.
 
 ## Architecture
 

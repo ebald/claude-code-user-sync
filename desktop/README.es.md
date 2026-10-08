@@ -70,7 +70,7 @@ La cantidad de cuentas procede de las carpetas locales de cuentas, en lugar del 
 
 Una sincronización correcta usa el estado de éxito. Los archivos o historiales no disponibles y las diferencias pendientes se indican específicamente y pueden consultarse en los diagnósticos. Los controles de archivos y copias de seguridad abren el resultado guardado en el explorador de archivos del sistema operativo. Si falla la localización automática de Claude, selecciona la aplicación o ejecutable de Claude mediante la interfaz.
 
-La sincronización autenticada desde el código fuente se verificó en una VM Windows 11 ARM64 mediante emulación x64 y en una VM Debian 13.7 ARM64 con LXDE. La preparación desde el código fuente y la selección de idioma también se verificaron en la VM Debian. Las pruebas autenticadas en un equipo Windows x64 nativo o en otras distribuciones o versiones de Linux, el instalador Windows empaquetado, la instalación nativa empaquetada en Linux y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
+La sincronización autenticada desde el código fuente se verificó en una VM Windows 11 ARM64 mediante emulación x64 y en una VM Debian 13.7 ARM64 con LXDE. La preparación desde el código fuente, la selección de idioma, una sincronización repetida sin escrituras del catálogo y las compilaciones nativas ARM64 también se verificaron en la VM Debian. Las pruebas autenticadas en un equipo Windows x64 nativo o en otras distribuciones o versiones de Linux, el instalador Windows empaquetado, la instalación nativa empaquetada en Linux y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
 
 ## Idiomas
 
@@ -149,6 +149,14 @@ En Ubuntu 24.04 y posteriores, AppArmor puede bloquear el inicio de Electron des
 
 La compilación incluye el backend Python y crea un instalador Debian `.deb` y archivo portátil `.tar.gz` en `release/`. El equipo de destino no necesita instalar Node.js ni Python aparte. Abre el `.deb` con el instalador de software, o extrae el archivo portátil y ejecuta `claude-code-user-sync` como usuario normal. Usa la [guía oficial de Claude Desktop Linux beta](https://code.claude.com/docs/en/desktop-linux) para instalar Claude.
 
+Desde la carpeta del proyecto, también puedes instalar el `.deb` en un terminal si no hay un instalador de software:
+
+```sh
+sudo apt install './release/claude-code-user-sync_1.3.0_arm64.deb'
+```
+
+Este nombre de archivo es un ejemplo para la versión 1.3.0 en ARM64. Sustitúyelo por el nombre real del `.deb` para tu versión y arquitectura; después abre **Claude Code User Sync** desde el menú de aplicaciones.
+
 ### Aplicación sin instalador
 
 En cualquier plataforma de destino:
@@ -195,11 +203,17 @@ En la misma VM Windows 11 ARM64, la aplicación desde el código fuente sincroni
 
 En una VM Debian 13.7 ARM64 recién instalada con LXDE, se descargó un ZIP público de GitHub del commit `641bac4` sin credenciales y se extrajo en una carpeta con espacios. `bash ./setup.sh --check` informó de Node.js/npm, soporte de entornos virtuales de Python y curl ausentes sin modificar el código fuente. La ejecución predeterminada de `bash ./setup.sh` instaló los requisitos, descargó y verificó Node.js 22.23.3 ARM64 oficial y abrió la aplicación desde el código fuente con Python 3.13.5 y Electron 44.5.1. El cierre normal de la aplicación y la comprobación final de requisitos terminaron con código de salida 0. La interfaz real seleccionó inglés a partir de la configuración regional `en_US` del sistema y cambió a portugués y español. La elección manual del español se mantuvo tras reiniciar la VM.
 
-Las comprobaciones JavaScript en Linux tuvieron 57 pruebas aprobadas y una omisión prevista; la suite Python ejecutó 200 pruebas con seis omisiones previstas y ningún fallo. La comprobación de la vista previa desde el código fuente pasó para los tres idiomas y la selección automática del idioma del sistema.
+Se descargó un segundo ZIP público del commit `697bd1a` sin credenciales. La preparación predeterminada actualizada instaló `binutils`, verificó Node.js 22.23.3 ARM64 oficial y abrió la aplicación desde el código fuente como usuario habitual del escritorio. El cierre normal de la aplicación y la comprobación final de requisitos terminaron con código de salida 0.
 
-En la misma VM Debian, la aplicación desde el código fuente sincronizó una conversación local nativa de Code entre dos cuentas inicializadas con sesión iniciada en Claude Desktop oficial 2.26454.2 ARM64. Iniciar la sincronización desde la aplicación mientras Claude estaba abierto cerró Claude normalmente y lo reabrió de forma automática conservando la sesión iniciada. Después, ambos catálogos de perfiles contenían la única conversación; la instantánea de la copia de seguridad y el catálogo escrito pasaron las comprobaciones de hashes, no faltaban historiales, no había conflictos y un plan posterior no tenía cambios pendientes. La comprobación no encontró cambios inesperados en los historiales o archivos de las conversaciones nativas ni escrituras fuera del alcance permitido de la sincronización. La instalación nativa empaquetada, la sincronización autenticada en otras distribuciones o versiones de Linux y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
+Las comprobaciones JavaScript en Linux tuvieron 57 pruebas aprobadas y una omisión prevista; la suite Python actualizada ejecutó 204 pruebas con seis omisiones previstas y ningún fallo. La comprobación de la vista previa desde el código fuente pasó para los tres idiomas y la selección automática del idioma del sistema.
 
-Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37646517870) del repositorio público pasaron para el commit `641bac4`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. Las pruebas automatizadas y de vista previa no demuestran que funcionen todos los flujos autenticados de Claude Desktop.
+En la misma VM Debian, la aplicación desde el código fuente sincronizó una conversación local nativa de Code entre dos cuentas inicializadas con sesión iniciada en Claude Desktop oficial 2.26454.2 ARM64. Iniciar la sincronización desde la aplicación mientras Claude estaba abierto cerró Claude normalmente y lo reabrió de forma automática conservando la sesión iniciada. Después, ambos catálogos de perfiles contenían la única conversación; la instantánea de la copia de seguridad y el catálogo escrito pasaron las comprobaciones de hashes, no faltaban historiales, no había conflictos y un plan posterior no tenía cambios pendientes. La comprobación no encontró cambios inesperados en los historiales o archivos de las conversaciones nativas ni escrituras fuera del alcance permitido de la sincronización.
+
+Una sincronización real repetida con el código fuente público corregido, mientras Claude estaba abierto, también cerró Claude normalmente y lo reabrió conservando la sesión iniciada. No escribió archivos del catálogo, las instantáneas de las copias de seguridad de ambos perfiles pasaron las comprobaciones de hashes y no se encontraron conversaciones duplicadas, historiales ausentes, conflictos, cambios pendientes ni cambios inesperados en archivos nativos.
+
+Una compilación nativa ARM64 generó correctamente el instalador Debian y el archivo portátil de la versión 1.3.0. La instalación nativa empaquetada, la sincronización autenticada en otras distribuciones o versiones de Linux y la preparación mediante AppArmor en Ubuntu siguen sin verificar.
+
+Los nueve [jobs de GitHub Actions](https://github.com/ebald/claude-code-user-sync/actions/runs/37709530312) del repositorio público pasaron para el commit `697bd1a`: pruebas de Python 3.10/3.14, del flujo de Electron y las traducciones, del backend incluido y de inicio de la aplicación empaquetada en macOS, Windows y Linux. También pasaron las compilaciones del instalador y el archivo portátil de Linux. Las pruebas automatizadas y de vista previa no demuestran que funcionen todos los flujos autenticados de Claude Desktop.
 
 ## Arquitectura
 
